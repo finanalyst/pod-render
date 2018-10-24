@@ -1,0 +1,27 @@
+{
+    "perl" : "6.*",
+    "name" : "Pod::Render",
+    "version" : "0.1.0",
+    "author" : "Richard Hainsworth",
+    "description" : "Render pod files from a cache.",
+    "license" : "Artistic-2.0",
+    "provides" : {
+        "Pod::Render" : "lib/Pod/Render.pm6"
+    },
+    "support" : {
+        "source" : "https://github.com/finanalyst/pod-render"
+    },
+    "depends" : [
+        "File::Directory::Tree",
+        "JSON::Fast",
+        "Pod::Cached"
+    ],
+    "test-depends" : [
+        "Test",
+        "Test::Output",
+        "JSON::Fast",
+        "File::Directory::Tree"
+    ],
+    "source-type" : "git",
+    "source-url" : "git://github.com/finanalyst/pod-cached.git"
+}
