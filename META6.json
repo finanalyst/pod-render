@@ -19,9 +19,9 @@
     "test-depends" : [
         "Test",
         "Test::Output",
-        "JSON::Fast",
+        "Pod::Cached",
         "File::Directory::Tree"
     ],
     "source-type" : "git",
-    "source-url" : "git://github.com/finanalyst/pod-cached.git"
+    "source-url" : "git://github.com/finanalyst/pod-render.git"
 }

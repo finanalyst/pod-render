@@ -3,14 +3,41 @@ use v6.c;
 use lib 'lib';
 use Test;
 use File::Directory::Tree;
-use JSON::Fast;
-done-testing;
-if 't/tmp'.IO ~~ :d  {
-    empty-directory 't/tmp';
+use Pod::Cached;
+plan 7;
+
+if 't/tmp/doc'.IO ~~ :d  {
+    empty-directory 't/tmp/doc';
 }
 else {
-    mktree 't/tmp'
+    mktree 't/tmp/doc/'
 }
+rmtree 't/tmp/ref';
+
+'t/tmp/doc/a-pod-file.pod6'.IO.spurt(q:to/POD-CONTENT/);
+    =begin pod
+    =TITLE This is a title
+
+    Some text
+
+    =end pod
+    POD-CONTENT
+
+'t/tmp/doc/a-second-pod-file.pod6'.IO.spurt(q:to/POD-CONTENT/);
+    =begin pod
+    =TITLE More and more
+
+    Some more text
+
+    =head2 This is a heading
+
+    Some text after a heading
+
+    =end pod
+    POD-CONTENT
+
+my $cache = Pod::Cached.new(:path<t/tmp/ref>, :source<t/tmp/doc>);
+$cache.update-cache;
 
 #--MARKER-- Test 1
 use-ok 'Pod::Render';
@@ -18,15 +45,29 @@ use Pod::Render;
 my Pod::Render $renderer;
 
 #--MARKER-- Test 2
-throws-like { $renderer .=new(:path<t/tmp/ref>) },
-    Exception, :message(/'is not a directory'/), 'cache does not exist';
-mktree 't/tmp/ref';
-#--MARKER-- Test 3
-throws-like { $renderer .=new(:path<t/tmp/ref>) },
-    Exception, :message(/'No file index in pod cache'/), 'cache does not have file index';
-'t/tmp/ref/file-index.json'.IO.spurt: ' ';
-#--MARKER-- Test 4
-throws-like { $renderer .=new(:path<t/tmp/ref>) },
-    Exception, :message(/'No file index in pod cache'/), 'No files in cache';
+lives-ok { $renderer .= new(:path<t/tmp/ref>)}, 'instantiates';
 
-done-testing;
+my $pod;
+#--MARKER-- Test 3
+ok ($pod = $renderer.pod('a-pod-file')) ~~ Pod::Block, 'returns a Pod block';
+
+my Pod::Render::Processed $pf;
+#--MARKER-- Test 4
+lives-ok { $pf = $renderer.processed-instance(:name<a-pod-file>, :pod-tree( $pod )) }, 'Processed file instance is created';
+#--MARKER-- Test 5
+like $pf.pod-body.subst(/\s+/,' ', :g).trim,
+    /'<section name="pod">' \s* '<h1 class="title" id="#__top">This is a title</h1>' \s* '<p>Some text</p>' \s* '</section>'/,
+    'simple pod rendered';
+
+$pf = $renderer.processed-instance(:name<a-second-pod-file>, :pod-tree( $renderer.pod('a-second-pod-file') ));
+#--MARKER-- Test 6
+like $pf.pod-body, /
+    '<h1 class="title" id="#__top">More and more</h1>'
+    \s* '<p>Some more text</p>'
+    \s* '<h2 id="#t_0_1"><a href="#__top" class="u">This is a heading</a></h2>'
+    \s* '<p>Some text after a heading</p>'
+    /, 'title rendered';
+#--MARKER-- Test 7
+like $pf.render-toc.subst(/\s+/,' ', :g).trim,
+    /'<nav class="indexgroup">' \s* '<table id="TOC">' \s* '<caption>' \s* '<h2 id="TOC_Title">Table of Contents</h2></caption>' \s* '<tr class="toc-level-2">' \s* '<td class="toc-text">' \s* '<a href="#t_0_1">This is a heading</a>' \s* '</td>' \s* '</tr>' \s* '</table>' \s* '</nav>'/
+    , 'rendered simple toc';
