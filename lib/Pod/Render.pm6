@@ -39,15 +39,17 @@ HTML file for each source pod.
     - location of templates root directory
     - defaults to 'resources/templates', which is where a complete set of templates exists
 
-=item output
-    - the path where output is sent
-    - default is a directory with the same name as C<rendering33>
-
 =item rendering
     - the type of rendering chosen
     - default is html, and refers to templates/html in which a complete set of templates exists
     - any other valid directory name can be used, eg md, so long as templates/md contains
     a complete set of templates
+    - It is possible to specify the template/rendering options with only those templates that
+    need to be over-ridden. 
+
+=item output
+    - the path where output is sent
+    - default is a directory with the same name as C<rendering33>
 
 =item global-links
     - boolean default False
@@ -60,6 +62,9 @@ constant TOP = '__top';
 
 
 unit class Pod::Render is Pod::Cached;
+
+constant TEMPLATES = 'resources/templates';
+constant RENDERING = 'html';
 
 our $global-links; # whether links must be unique to collection (True), or to Pod file (Default False)
 our %tmpl = (
@@ -84,11 +89,11 @@ has @!template-list = <
 has $!output;
 
 submethod BUILD(
-    :$!templates = 'resources/templates',
-    :$!rendering = 'html',
+    :$!templates = TEMPLATES,
+    :$!rendering = RENDERING,
     :$!output = $!rendering,
     :$global-links = False,
-    :$v = True,
+    :$verbose = False,
     ) {}
 
 submethod TWEAK {
@@ -97,18 +102,20 @@ submethod TWEAK {
 
 method verify-templates {
     die "$!templates/$!rendering must be a directory" unless "$!templates/$!rendering".IO ~~ :d;
-    my @errors = ();
+    my @missing = ();
     for @!template-list -> $tm {
         if "$!templates/$!rendering/$tm.mustache".IO ~~ :f {
             %tmpl{$tm} = "$!templates/$!rendering/$tm.mustache".IO.slurp;
         }
         else {
-            @errors.push: "$tm.mustache must exist ";
+            @missing.push: "$tm.mustache";
+            %tmpl{$tm} = "{TEMPLATES ~ '/' ~ RENDERING}/$tm.mustache".IO.slurp;
         }
     }
-    die "The following templates do not exist under $!templates/$!rendering"
-        ~ @errors.join("\n\t")
-        if +@errors;
+    note "The following templates do not exist under $!templates/$!rendering"
+        ~ @missing.join("\n\t")
+        ~ "\nThe default templates in ｢{TEMPLATES ~ '/' ~ RENDERING}｣ are used instead"
+        if +@missing;
     note 'Templates verified' if $verbose;
 }
 
