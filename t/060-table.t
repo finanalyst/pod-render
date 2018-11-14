@@ -28,7 +28,7 @@ $pr = cache_test(++$fn, q:to/PODEND/);
 
 #--MARKER-- Test 1
 like $pr.pod-body.subst(/\s+/,' ',:g).trim, /
-    '<table class="pod-table">'
+    \s* '<table class="pod-table">'
     \s*   '<tbody>'
     \s*     '<tr>'
     \s*       '<td>col1</td>'
@@ -48,7 +48,6 @@ $pr = cache_test(++$fn, q:to/PODEND/);
 
 #--MARKER-- Test 2
 like $pr.pod-body.subst(/\s+/,' ',:g).trim, /
-    '<table class="pod-table">'
     \s*   '<thead>'
     \s*     '<tr>'
     \s*       '<th>H1</th>'

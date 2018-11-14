@@ -53,7 +53,7 @@ ok ($pod = $renderer.pod('a-pod-file')) ~~ Pod::Block, 'returns a Pod block';
 
 my Pod::Render::Processed $pf;
 #--MARKER-- Test 4
-lives-ok { $pf = $renderer.processed-instance(:name<a-pod-file>, :pod-tree( $pod )) }, 'Processed file instance is created';
+lives-ok { $pf = $renderer.processed-instance(:name<a-pod-file>, :pod-tree( $pod ) ) }, 'Processed file instance is created';
 #--MARKER-- Test 5
 like $pf.pod-body.subst(/\s+/,' ', :g).trim,
     /'<section name="pod">' \s* '<h1 class="title" id="#__top">This is a title</h1>' \s* '<p>Some text</p>' \s* '</section>'/,

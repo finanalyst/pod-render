@@ -7,7 +7,7 @@ plan 3;
 
 constant REP = 't/tmp/ref';
 constant DOC = 't/tmp/doc/';
-my $fn = 'basic-test-pod-file_0';
+my $fn = 'non-breaking-space-test-pod-file_0';
 
 my Pod::Cached $cache .= new(:path(REP)); # dies if no cache
 my Pod::Render::Processed $pr;

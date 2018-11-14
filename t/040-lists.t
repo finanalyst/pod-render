@@ -3,8 +3,7 @@ use Test;
 use Pod::Cached;
 use Pod::Render;
 
-plan :skip-all<Lists being refactored>;
-plan 3;
+plan 5;
 my $fn = 'lists-test-pod-file_0';
 
 constant REP = 't/tmp/ref';
@@ -18,7 +17,7 @@ sub cache_test(Str $fn is copy, Str $to-cache --> Pod::Render::Processed ) {
     my Pod::Cached $cache .=new(:path( REP ));
     $cache.update-cache;
     my Pod::Render $pr .= new(:path( REP ) );
-    $pr.processed-instance(:name("$fn"), :pod-tree($pr.pod("$fn")),:debug(2));
+    $pr.processed-instance(:name("$fn"), :pod-tree($pr.pod("$fn")));
 }
 
 $pr = cache_test(++$fn, q:to/PODEND/);
@@ -32,12 +31,15 @@ $pr = cache_test(++$fn, q:to/PODEND/);
     =item  Sneezy
     =item  Grumpy
     =item  Keyser Soze
+
+    We want to know the first through the door.
     =end pod
     PODEND
 
 #--MARKER-- Test 1
 like $pr.pod-body.subst(/\s+/,' ',:g).trim, /
-    '<p>The seven suspects are:</p>'
+    '<section name="pod">'
+    \s*'<p>The seven suspects are:</p>'
     \s* '<ul>'
     \s* '<li>' \s* '<p>Happy</p>' \s* '</li>'
     \s* '<li>' \s* '<p>Dopey</p>' \s* '</li>'
@@ -47,6 +49,8 @@ like $pr.pod-body.subst(/\s+/,' ',:g).trim, /
     \s* '<li>' \s* '<p>Grumpy</p>' \s* '</li>'
     \s* '<li>' \s* '<p>Keyser Soze</p>' \s* '</li>'
     \s* '</ul>'
+    \s* '<p>We want to know the first through the door.</p>'
+    \s* '</section>'
     /, 'simple list ok';
 
 $pr = cache_test(++$fn, q:to/PODEND/);
@@ -107,3 +111,74 @@ like $pr.pod-body.subst(/\s+/,' ',:g).trim,
     \s* '</ul>'
     \s* '</ul>'
     /, 'hierarchical unordered list';
+
+$pr = cache_test(++$fn, q:to/PODEND/);
+    =begin pod
+    =comment CORRECT...
+    =begin item1
+    The choices are:
+    =end item1
+    =item2 Liberty
+    =item2 Death
+    =item2 Beer
+    =item4 non-alcoholic
+    =end pod
+    PODEND
+
+#--MARKER-- Test 4
+like $pr.pod-body.subst(/\s+/,' ',:g).trim,
+    /
+    '<ul>'
+    \s* '<li>' \s* '<p>The choices are:</p>' \s* '</li>'
+    \s* '<ul>'
+    \s*     '<li>' \s* '<p>Liberty</p>' \s* '</li>'
+    \s*     '<li>' \s* '<p>Death</p>' \s* '</li>'
+    \s*     '<li>' \s* '<p>Beer</p>' \s* '</li>'
+    \s*    '<ul>'
+    \s*         '<ul>'
+    \s*             '<li>' \s* '<p>non-alcoholic</p>' \s* ' </li>'
+    \s*         '</ul>'
+    \s*     '</ul>'
+    \s* '</ul>'
+    \s* '</ul>'
+    /, 'hierarchical unordered list';
+
+$pr = cache_test(++$fn, q:to/PODEND/);
+    =begin pod
+    Let's consider two common proverbs:
+
+    =begin item
+    I<The rain in Spain falls mainly on the plain.>
+
+    This is a common myth and an unconscionable slur on the Spanish
+    people, the majority of whom are extremely attractive.
+    =end item
+
+    =begin item
+    I<The early bird gets the worm.>
+
+    In deciding whether to become an early riser, it is worth
+    considering whether you would actually enjoy annelids
+    for breakfast.
+    =end item
+
+    As you can see, folk wisdom is often of dubious value.
+    =end pod
+    PODEND
+
+#--MARKER-- Test 5
+like $pr.pod-body.subst(/\s+/,' ',:g).trim,
+    /
+    '<p>Let\'s consider two common proverbs:</p>'
+    \s* '<ul>'
+    \s*     '<li>'
+    \s*         '<p>' \s* '<em>The rain in Spain falls mainly on the plain.</em>' \s* '</p>'
+    \s*         '<p>This is a common myth and an unconscionable slur on the Spanish people, the majority of whom are extremely attractive.</p>'
+    \s*     '</li>'
+    \s*     '<li>'
+    \s*         '<p>' \s* '<em>The early bird gets the worm.</em>' \s* '</p>'
+    \s*         '<p>In deciding whether to become an early riser, it is worth considering whether you would actually enjoy annelids for breakfast.</p>'
+    \s*     '</li>'
+    \s* '</ul>'
+    \s* '<p>As you can see, folk wisdom is often of dubious value.</p>'
+    /, 'List with embedded paragraphs';
