@@ -231,15 +231,15 @@ class Processed {
     }
 
     multi sub handle (Pod::Block::Comment $node, Int $in-level, Processed $pf  --> Str ) {
-        $pf.completion($in-level, 'zero', {:contents([~] $node.contents>>.&handle($in-level, $pf ))});
+        $pf.completion($in-level, 'zero', {:contents([~] $node.contents>>.&handle($in-level, $pf ))})
     }
 
     multi sub handle (Pod::Block::Declarator $node, Int $in-level, Processed $pf  --> Str ) {
-        $pf.completion($in-level, 'notimplemented', {:contents([~] $node.contents>>.&handle($in-level, $pf ))});
+        $pf.completion($in-level, 'notimplemented', {:contents([~] $node.contents>>.&handle($in-level, $pf ))})
     }
 
     multi sub handle (Pod::Block::Named $node, Int $in-level, Processed $pf  --> Str ) {
-        $pf.completion($in-level, 'section', { :name($node.name), :contents( [~] $node.contents>>.&handle($in-level, $pf ))  });
+        $pf.completion($in-level, 'section', { :name($node.name), :contents( [~] $node.contents>>.&handle($in-level, $pf ))  })
     }
 
     multi sub handle (Pod::Block::Named $node where $node.name eq 'TITLE', Int $in-level, Processed $pf --> Str ) {
@@ -324,7 +324,7 @@ class Processed {
     }
 
     multi sub handle (Str $node, Int $in-level, Processed $pf, Context $context? = None --> Str ) {
-        rendition('escaped', {:contents(~$node)});
+        rendition('escaped', {:contents(~$node)})
     }
 
     multi sub handle (Str $node, Int $in-level, Processed $pf, Context $context where * == HTML --> Str ) {
@@ -340,7 +340,7 @@ class Processed {
     }
 
     multi sub handle (Pod::FormattingCode $node, Int $in-level, Processed $pf, Context $context where * == Raw   --> Str ) {
-        $pf.completion($in-level, 'raw', {:contents( [~] $node.contents>>.&handle($in-level, $pf, $context) ) } );
+        $pf.completion($in-level, 'raw', {:contents( [~] $node.contents>>.&handle($in-level, $pf, $context) ) } )
     }
 
     multi sub handle (Pod::FormattingCode $node where .type eq 'B', Int $in-level, Processed $pf, Context $context = None   --> Str ) {
@@ -350,7 +350,7 @@ class Processed {
 
     multi sub handle (Pod::FormattingCode $node where .type eq 'C', Int $in-level, Processed $pf, Context $context? = None   --> Str ) {
         my $addClass = ($node.config && $node.config<class> ?? ' ' ~ $node.config<class> !! '');
-        $pf.completion($in-level, 'format-c', {:$addClass, :contents([~] $node.contents>>.&handle($in-level, $pf, $context ) ) } );
+        $pf.completion($in-level, 'format-c', {:$addClass, :contents([~] $node.contents>>.&handle($in-level, $pf, $context ) ) } )
     }
 
     multi sub handle (Pod::FormattingCode $node where .type eq 'C', Int $in-level, Processed $pf, Context $context where * ~~ Index   --> Str ) {
@@ -390,27 +390,31 @@ class Processed {
         $pf.links.push: $target;
         # link handling needed here to deal with local links in global-link context
 
-        $pf.completion($in-level, 'format-l', {:$target, :$addClass, :contents([~] $node.contents>>.&handle($in-level, $pf, $context ) ) } );
+        $pf.completion($in-level, 'format-l', {:$target, :$addClass, :contents([~] $node.contents>>.&handle($in-level, $pf, $context ) ) } )
     }
 
     multi sub handle (Pod::FormattingCode $node where .type eq 'R', Int $in-level, Processed $pf, Context $context = None   --> Str ) {
         my $addClass = ($node.config && $node.config<class> ?? ' ' ~ $node.config<class> !! '');
-        $pf.completion($in-level, 'format-r', {:$addClass, :contents([~] $node.contents>>.&handle($in-level, $pf, $context ) ) } );
+        $pf.completion($in-level, 'format-r', {:$addClass, :contents([~] $node.contents>>.&handle($in-level, $pf, $context ) ) } )
     }
 
     multi sub handle (Pod::FormattingCode $node where .type eq 'T', Int $in-level, Processed $pf, Context $context = None   --> Str ) {
         my $addClass = ($node.config && $node.config<class> ?? ' ' ~ $node.config<class> !! '');
-        $pf.completion($in-level, 'format-t', {:$addClass, :contents([~] $node.contents>>.&handle($in-level, $pf, $context ) ) } );
+        $pf.completion($in-level, 'format-t', {:$addClass, :contents([~] $node.contents>>.&handle($in-level, $pf, $context ) ) } )
     }
 
     multi sub handle (Pod::FormattingCode $node where .type eq 'K', Int $in-level, Processed $pf, Context $context? = None   --> Str ) {
         my $addClass = ($node.config && $node.config<class> ?? ' ' ~ $node.config<class> !! '');
-        $pf.completion($in-level, 'format-k', {:$addClass, :contents([~] $node.contents>>.&handle($in-level, $pf, $context ) ) } );
+        $pf.completion($in-level, 'format-k', {:$addClass, :contents([~] $node.contents>>.&handle($in-level, $pf, $context ) ) } )
     }
 
     multi sub handle (Pod::FormattingCode $node where .type eq 'U', Int $in-level, Processed $pf, Context $context = None   --> Str ) {
         my $addClass = ($node.config && $node.config<class> ?? ' ' ~ $node.config<class> !! '');
-        $pf.completion($in-level, 'format-u', {:$addClass, :contents([~] $node.contents>>.&handle($in-level, $pf, $context ) ) } );
+        $pf.completion($in-level, 'format-u', {:$addClass, :contents([~] $node.contents>>.&handle($in-level, $pf, $context ) ) } )
+    }
+
+    multi sub handle (Pod::FormattingCode $node where .type eq 'V', Int $in-level, Processed $pf, Context , $context = None  --> Str ) {
+        $pf.completion($in-level, 'raw', {:contents([~] $node.contents>>.&handle($in-level, $pf, $context ) ) } )
     }
 
     =begin takeout
@@ -449,10 +453,6 @@ class Processed {
         }
         warn "did not inline $link";
         q:c{<a href="{$link}">{$content}</a>}
-    }
-
-    multi sub handle (Pod::FormattingCode $node where .type eq 'V', $context = None, :$pod-name?, :$part-number?, :$toc-counter?) {
-        '' ~ $node.contents>>.&handle($context) ~ ''
     }
 
 

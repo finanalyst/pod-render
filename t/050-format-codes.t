@@ -3,7 +3,7 @@ use Test;
 use Pod::Cached;
 use Pod::Render;
 
-plan 18;
+plan 19;
 my $fn = 'format-codes-test-pod-file_0';
 
 constant REP = 't/tmp/ref';
@@ -298,3 +298,20 @@ like $rv, /
     \s* '<a href="https://doc.perl6.org">Link to a place</a>'
     \s* 'with no problem.'
     /, 'L format';
+
+$pr = cache_test(++$fn, q:to/PODEND/);
+    =begin pod
+
+    Some thing to V< B<say> C<in>> between words.
+    =end pod
+    PODEND
+
+$rv = $pr.pod-body.subst(/\s+/,' ',:g).trim;
+#--MARKER-- Test 15
+like $rv, /
+    '<section name="pod">'
+    \s* '<p>'
+    \s* 'Some thing to'
+    \s+ 'B&lt;say&gt;'
+    \s+ 'C&lt;in&gt; between words.'
+    /, 'V format';
