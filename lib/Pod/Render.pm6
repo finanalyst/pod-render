@@ -209,10 +209,8 @@ class Processed {
     method completion(Int $in-level, Str $key, %params --> Str) {
         my Str $rv = '';
         my $top-level = @.itemlist.elems;
-#        say "at $?LINE inlevel=$in-level, top-level=$top-level, inlist: ", @.itemlist.perl;
         while $top-level > $in-level {
             if $top-level > 1 {
-#            say "at $?LINE inlevel=$in-level, top-level=$top-level, inlist: ", @.itemlist.perl;
                 @.itemlist[$top-level - 2][0] = '' unless @.itemlist[$top-level - 2][0]:exists;
                 @.itemlist[$top-level - 2][* - 1] ~= rendition('list', {:items( @.itemlist.pop ) })
             }
@@ -222,9 +220,6 @@ class Processed {
             $top-level = @.itemlist.elems
         }
         $rv ~= rendition($key, %params);
-
-#        say "at $?LINE rv=｢$rv｣, inlevel=$in-level, top-level=$top-level, inlist: ", @.itemlist.perl;
-        $rv
     }
 
     my enum Context ( None => 0, Index => 1 , Heading => 2, HTML => 3, Raw => 4, Output => 5);
