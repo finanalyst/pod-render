@@ -1,22 +1,22 @@
 use lib 'lib';
 use Test;
 use File::Directory::Tree;
-use Pod::Cached;
-use Pod::Render;
+use Pod::To::Cached;
+use PodCache::Render;
 plan 3;
 
 constant REP = 't/tmp/ref';
 constant DOC = 't/tmp/doc/';
 my $fn = 'non-breaking-space-test-pod-file_0';
 
-my Pod::Cached $cache .= new(:path(REP)); # dies if no cache
-my Pod::Render::Processed $pr;
+my Pod::To::Cached $cache .= new(:path(REP)); # dies if no cache
+my PodCache::Render::Processed $pr;
 
-sub cache_test(Str $fn is copy, Str $to-cache --> Pod::Render::Processed ) {
+sub cache_test(Str $fn is copy, Str $to-cache --> PodCache::Render::Processed ) {
     (DOC ~ "$fn.pod6").IO.spurt: $to-cache;
-    my Pod::Cached $cache .=new(:path( REP ));
+    my Pod::To::Cached $cache .=new(:path( REP ));
     $cache.update-cache;
-    my Pod::Render $pr .= new(:path( REP ) );
+    my PodCache::Render $pr .= new(:path( REP ) );
     $pr.processed-instance(:name("$fn"), :pod-tree($pr.pod("$fn")));
 }
 

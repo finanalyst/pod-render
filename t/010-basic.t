@@ -2,9 +2,10 @@
 use v6.c;
 use lib 'lib';
 use Test;
+use Test::Output;
 use File::Directory::Tree;
-use Pod::Cached;
-plan 7;
+use Pod::To::Cached;
+plan 8;
 
 if 't/tmp/doc'.IO ~~ :d  {
     empty-directory 't/tmp/doc';
@@ -36,13 +37,13 @@ rmtree 't/tmp/ref';
     =end pod
     POD-CONTENT
 
-my $cache = Pod::Cached.new(:path<t/tmp/ref>, :source<t/tmp/doc>);
+my $cache = Pod::To::Cached.new(:path<t/tmp/ref>, :source<t/tmp/doc>);
 $cache.update-cache;
 
 #--MARKER-- Test 1
-use-ok 'Pod::Render';
-use Pod::Render;
-my Pod::Render $renderer;
+use-ok 'PodCache::Render';
+use PodCache::Render;
+my PodCache::Render $renderer;
 
 #--MARKER-- Test 2
 lives-ok { $renderer .= new(:path<t/tmp/ref>)}, 'instantiates';
@@ -51,9 +52,11 @@ my $pod;
 #--MARKER-- Test 3
 ok ($pod = $renderer.pod('a-pod-file')) ~~ Pod::Block, 'returns a Pod block';
 
-my Pod::Render::Processed $pf;
+my PodCache::Render::Processed $pf;
+
 #--MARKER-- Test 4
 lives-ok { $pf = $renderer.processed-instance(:name<a-pod-file>, :pod-tree( $pod ) ) }, 'Processed file instance is created';
+output-like { $renderer.processed-instance(:name<a-pod-file>, :pod-tree( $pod ), :debug ) }, / 'pod-tree is:' /, 'Debug info is given';
 #--MARKER-- Test 5
 like $pf.pod-body.subst(/\s+/,' ', :g).trim,
     /'<section name="pod">' \s* '<h1 class="title" id="#__top">This is a title</h1>' \s* '<p>Some text</p>' \s* '</section>'/,
