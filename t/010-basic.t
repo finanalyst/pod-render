@@ -5,7 +5,8 @@ use Test;
 use Test::Output;
 use File::Directory::Tree;
 use Pod::To::Cached;
-plan 8;
+
+plan 9;
 
 if 't/tmp/doc'.IO ~~ :d  {
     empty-directory 't/tmp/doc';
@@ -52,25 +53,30 @@ my $pod;
 #--MARKER-- Test 3
 ok ($pod = $renderer.pod('a-pod-file')) ~~ Pod::Block, 'returns a Pod block';
 
-my PodCache::Render::Processed $pf;
+use-ok 'PodCache::Processed';
+use  PodCache::Processed;
+my PodCache::Processed $pf;
 
 #--MARKER-- Test 4
 lives-ok { $pf = $renderer.processed-instance(:name<a-pod-file>, :pod-tree( $pod ) ) }, 'Processed file instance is created';
-output-like { $renderer.processed-instance(:name<a-pod-file>, :pod-tree( $pod ), :debug ) }, / 'pod-tree is:' /, 'Debug info is given';
+$renderer.debug = True;
 #--MARKER-- Test 5
+output-like { $renderer.processed-instance(:name<a-pod-file>, :pod-tree( $pod ) ) }, / 'pod-tree is:' /, 'Debug info is given';
+$renderer.debug = False;
+#--MARKER-- Test 6
 like $pf.pod-body.subst(/\s+/,' ', :g).trim,
     /'<section name="pod">' \s* '<h1 class="title" id="#__top">This is a title</h1>' \s* '<p>Some text</p>' \s* '</section>'/,
     'simple pod rendered';
 
 $pf = $renderer.processed-instance(:name<a-second-pod-file>, :pod-tree( $renderer.pod('a-second-pod-file') ));
-#--MARKER-- Test 6
+#--MARKER-- Test 7
 like $pf.pod-body, /
     '<h1 class="title" id="#__top">More and more</h1>'
     \s* '<p>Some more text</p>'
     \s* '<h2 id="#t_0_1"><a href="#__top" class="u">This is a heading</a></h2>'
     \s* '<p>Some text after a heading</p>'
     /, 'title rendered';
-#--MARKER-- Test 7
+#--MARKER-- Test 8
 like $pf.render-toc.subst(/\s+/,' ', :g).trim,
     /'<nav class="indexgroup">' \s* '<table id="TOC">' \s* '<caption>' \s* '<h2 id="TOC_Title">Table of Contents</h2></caption>' \s* '<tr class="toc-level-2">' \s* '<td class="toc-text">' \s* '<a href="#t_0_1">This is a heading</a>' \s* '</td>' \s* '</tr>' \s* '</table>' \s* '</nav>'/
     , 'rendered simple toc';

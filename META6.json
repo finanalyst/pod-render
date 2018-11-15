@@ -6,7 +6,9 @@
     "description" : "Render pod files from a cache.",
     "license" : "Artistic-2.0",
     "provides" : {
-        "Pod::Render" : "lib/Pod/Render.pm6"
+        "PodCache::Render" : "lib/PodCache/Render.pm6",
+        "PodCache::Engine" : "lib/PodCache/Engine.pm6",
+        "PodCache::Processed" : "lib/PodCache/Processed.pm6"
     },
     "support" : {
         "source" : "https://github.com/finanalyst/pod-render"
@@ -14,12 +16,12 @@
     "depends" : [
         "File::Directory::Tree",
         "JSON::Fast",
-        "Pod::Cached"
+        "Pod::To::Cached"
     ],
     "test-depends" : [
         "Test",
         "Test::Output",
-        "Pod::Cached",
+        "Pod::To::Cached",
         "File::Directory::Tree"
     ],
     "source-type" : "git",

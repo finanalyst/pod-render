@@ -2,6 +2,7 @@ use lib 'lib';
 use Test;
 use Pod::To::Cached;
 use PodCache::Render;
+use PodCache::Processed;
 
 plan 1;
 my $fn = 'preserve-html-test-pod-file_0';
@@ -10,10 +11,10 @@ constant REP = 't/tmp/ref';
 constant DOC = 't/tmp/doc/';
 
 my Pod::To::Cached $cache .= new(:path(REP)); # dies if no cache
-my PodCache::Render::Processed $pr;
+my PodCache::Processed $pr;
 my Str $rv;
 
-sub cache_test(Str $fn is copy, Str $to-cache --> PodCache::Render::Processed ) {
+sub cache_test(Str $fn is copy, Str $to-cache --> PodCache::Processed ) {
     (DOC ~ "$fn.pod6").IO.spurt: $to-cache;
     my Pod::To::Cached $cache .=new(:path( REP ));
     $cache.update-cache;
@@ -36,6 +37,7 @@ $pr = cache_test(++$fn, q:to/PODEND/);
     PODEND
 
 $rv = $pr.pod-body.subst(/\s+/,' ',:g).trim;
+#--MARKER-- Test 1
 like $rv, /
     '<img style="float: right; margin: 0 0 1em 1em; width:261px" src="/images/Camelia.svg" alt="" id="home_logo"/>'
     \s* ' Welcome to the official documentation of the <a href="https://perl6.org">Perl 6</a> programming language!'

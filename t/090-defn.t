@@ -10,6 +10,7 @@ plan 1;
 
 use Pod::To::Cached;
 use PodCache::Render;
+use PodCache::Processed;
 
 my $fn = 'defn-test-pod-file_0';
 
@@ -17,9 +18,9 @@ constant REP = 't/tmp/ref';
 constant DOC = 't/tmp/doc/';
 
 my Pod::To::Cached $cache .= new(:path(REP)); # dies if no cache
-my PodCache::Render::Processed $pr;
+my PodCache::Processed $pr;
 
-sub cache_test(Str $fn is copy, Str $to-cache --> PodCache::Render::Processed ) {
+sub cache_test(Str $fn is copy, Str $to-cache --> PodCache::Processed ) {
     (DOC ~ "$fn.pod6").IO.spurt: $to-cache;
     my Pod::To::Cached $cache .=new(:path( REP ));
     $cache.update-cache;

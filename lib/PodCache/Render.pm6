@@ -1,10 +1,6 @@
 #! /usr/bin/env perl6
 use v6.c;
-use Template::Mustache;
-use JSON::Fast;
-use nqp;
-use Pod::To::Cached;
-no precompilation;
+
 =begin pod
 =TITLE Rendering pod
 
@@ -58,417 +54,49 @@ HTML file for each source pod.
 
 =end pod
 
+use JSON::Fast;
+use nqp;
+use Pod::To::Cached;
+use PodCache::Engine;
+use PodCache::Processed;
+
+no precompilation;
 unit class PodCache::Render is Pod::To::Cached;
 
+my PodCache::Engine $engine;
 constant TEMPLATES = 'resources/templates';
 constant RENDERING = 'html';
-constant TOP = '__top';
 
-our $global-links; # whether links must be unique to collection (True), or to Pod file (Default False)
-our %tmpl = (
-    #| templates defined here without explicit html
-    #| markup specific templates defined in mustache files.
-    #| simple ones can be overidden by mustache files
-    :escaped<{{ contents }}>,
-    :raw<{{{ contents }}}>,
-    :format-c-index('C<{{ contents }}>'),
-    :zero(' '),
-    ); # templates as strings
-our $engine = Template::Mustache.new;
-our $verbose;
-our $debug = False; # debug for rendition method
-
-has Str $!templates;
-has Str $!rendering;
-# list of the templates needed (not defined as short templates below)
-has @!template-list = <
-    block-code comment footnotes format-b format-c format-i format-k format-l format-n
-    format-r format-t format-u format-x heading index item list main notimplemented
-    output para section subtitle table title toc
-    >;
-has @!over-ridden = ();
+has Bool $!global-links; # whether links must be unique to collection (True), or to Pod file (Default False)
+has Bool $.verbose is rw;
+has Bool $.debug is rw;
+has $!templates;
+has $!rendering;
 has $!output;
 
 submethod BUILD(
     :$!templates = TEMPLATES,
     :$!rendering = RENDERING,
     :$!output = $!rendering,
-    :$global-links = False,
-    :$verbose = False,
-    :$debug = False,
+    :$!global-links = False,
+    :$!verbose = False,
+    :$!debug = False,
     ) {}
 
 submethod TWEAK {
-    self.verify-templates;
+    $engine .= new(:default( TEMPLATES ~ '/' ~ RENDERING ), :$!templates, :$!rendering);
+    $engine.verify-templates;
 }
 
-method verify-templates {
-    die "$!templates/$!rendering must be a directory" unless "$!templates/$!rendering".IO ~~ :d;
-    my @missing = ();
-    for @!template-list -> $tm {
-        if "$!templates/$!rendering/$tm.mustache".IO ~~ :f {
-            %tmpl{$tm} = "$!templates/$!rendering/$tm.mustache".IO.slurp;
-            @!over-ridden.push: "$tm"
-        }
-        else {
-            %tmpl{$tm} = "{TEMPLATES ~ '/' ~ RENDERING}/$tm.mustache".IO.slurp;
-            @missing.push: "$tm"
-        }
-    }
-    note "The following templates do not exist under $!templates/$!rendering"
-        ~ @missing.join("\n\t")
-        ~ "\nThe default templates in ｢{TEMPLATES ~ '/' ~ RENDERING}｣ are used instead"
-        if +@missing and $verbose;
-    note 'Templates verified' if $verbose;
+method tmpl-report { $engine.tmpl-report }
+
+
+sub body-wrap( $pf --> Str ) {
+    $engine.rendition('body-wrap', {:contents( $pf.pod-body )})
 }
 
-method tmpl-report( --> Str) {
-    [~] gather for @!template-list -> $tm {
-        take "｢$tm\.mustache｣ from " ~ (($tm ~~ any @!over-ridden) ?? "$!templates/$!rendering" !!  (TEMPLATES ~ '/' ~ RENDERING) ~ "\n")
-    }
+sub file-wrap( *@sections --> Str ) {
+    $engine.rendition('file-wrap', {:contents( [~] @sections )})
 }
 
-sub rendition(Str $key, %params --> Str) {
-    if $debug {
-        say "key is $key";
-        say 'params are: ';
-        say %params.perl;
-        say 'end params';
-        say "\%tmpl\{$key} is: ";
-        say %tmpl{$key}.perl;
-        say "end template";
-    }
-    $engine.render( %tmpl{$key}, %params, :literal );
-}
-
-class Processed {
-    has Str $.name;
-    has Str $.title is rw = '';
-    has Str $.sub-title is rw = '';
-    has Str $.top; # target for TITLE
-    has $.pod-tree; # cached pod
-    has Str $.pod-body; # generated html
-    has @.toc = ();
-    has %.index = ();
-    has @.links = (); # for links outside the Processed
-    has @.footnotes = ();
-    has SetHash $.targets .= new; # target names are relative to Processed
-    has Int @.counters is default(0);
-    has Bool $.debug is rw;
-    has @.itemlist = ();
-
-    submethod BUILD  (:$!name, :$!pod-tree, :$!debug = False ) { }
-
-    submethod TWEAK {
-        $!top = self.unique-target( TOP );
-        self.process-pod;
-    }
-
-    method register-toc(:$level!, :$text! --> Str) {
-        @!counters[$level - 1]++;
-        @!counters.splice($level);
-        my $target = self.unique-target('t_' ~ @!counters>>.Str.join: '_') ;
-        @!toc.push: %( :$level, :$text, :$target);
-        $target
-    }
-    method render-toc( --> Str ) {
-        rendition('toc', { :toc( @!toc ) });
-    }
-    method register-index(:$text! is copy, :$place is copy --> Str) {
-        $text = 'blank' if $text ~~ / ^ \s* $ /;
-        $place = 'Here' if $place ~~ / ^ \s* $ /;
-        %.index{$text} = Array unless %.index{$text}:exists;
-        my $target = self.unique-target("t_$text") ;
-        %.index{$text}.push: %(:$target, :$place);
-        $target
-    }
-    method render-index(-->Str) {
-        rendition( 'index', { :index([gather for %!index.sort {  take %(:text(.key), :refs( [.value.sort] )) } ]) }  )
-    }
-    method !register-link(:$text!, :$link!, :$place) {
-        @!links.push: %( :$text, :$link, :$place)
-    }
-    method register-footnote(:$text! --> Hash ) {
-        my $fnNumber = +@!footnotes + 1;
-        my $fnTarget = self.unique-target("fn$fnNumber") ;
-        my $retTarget = self.unique-target("fnret$fnNumber");
-        @!footnotes.push: {:$text, :$retTarget, :$fnNumber, :$fnTarget };
-        (:$fnTarget, :$fnNumber, :$retTarget).hash
-    }
-    method render-footnotes(--> Str){
-        rendition('footnotes', { :notes( @!footnotes ) } )
-    }
-    method process-pod {
-        say "Processing pod for $.name" if $verbose;
-        (say "pod-tree is:" and dd $!pod-tree) if $.debug;
-        $!pod-body = [~] $!pod-tree>>.&handle( 0, self );
-    }
-
-    method unique-target(Str $name is copy --> Str ) {
-        $name = $name.subst(/\s+\.*|\./,'_',:g).subst(/<-alnum>/,'',:g).substr(0,15);
-        $name ~= '_1' if $name (<) $!targets;
-        ++$name while $!targets{$name};
-        my $prefix = '#' ~ ($global-links ?? $!name.subst([\/], '_') !! '');
-        $prefix ~ $name
-    }
-
-    method completion(Int $in-level, Str $key, %params --> Str) {
-        my Str $rv = '';
-        my $top-level = @.itemlist.elems;
-        while $top-level > $in-level {
-            if $top-level > 1 {
-                @.itemlist[$top-level - 2][0] = '' unless @.itemlist[$top-level - 2][0]:exists;
-                @.itemlist[$top-level - 2][* - 1] ~= rendition('list', {:items( @.itemlist.pop ) })
-            }
-            else {
-                $rv ~= rendition('list', {:items( @.itemlist.pop ) })
-            }
-            $top-level = @.itemlist.elems
-        }
-        $rv ~= rendition($key, %params);
-    }
-
-    my enum Context ( None => 0, Index => 1 , Heading => 2, HTML => 3, Raw => 4, Output => 5);
-
-    #| Multi for handling different types of Pod blocks.
-    multi sub handle (Pod::Block::Code $node, Int $in-level, Processed $pf  --> Str ) {
-        my $addClass = $node.config && $node.config<class> ?? ' ' ~ $node.config<class> !! '';
-        $pf.completion($in-level, 'block-code', {:$addClass, :contents( [~] $node.contents>>.&handle($in-level, $pf ) )} )
-    }
-
-    multi sub handle (Pod::Block::Comment $node, Int $in-level, Processed $pf  --> Str ) {
-        $pf.completion($in-level, 'zero', {:contents([~] $node.contents>>.&handle($in-level, $pf ))})
-    }
-
-    multi sub handle (Pod::Block::Declarator $node, Int $in-level, Processed $pf  --> Str ) {
-        $pf.completion($in-level, 'notimplemented', {:contents([~] $node.contents>>.&handle($in-level, $pf ))})
-    }
-
-    multi sub handle (Pod::Block::Named $node, Int $in-level, Processed $pf  --> Str ) {
-        $pf.completion($in-level, 'section', { :name($node.name), :contents( [~] $node.contents>>.&handle($in-level, $pf ))  })
-    }
-
-    multi sub handle (Pod::Block::Named $node where $node.name eq 'TITLE', Int $in-level, Processed $pf --> Str ) {
-        my $addClass = ($node.config && $node.config<class> ?? ' ' ~ $node.config<class> !! '');
-        my $text = $pf.title = $node.contents[0].contents[0].Str;
-        my $target = $pf.top;
-        $pf.completion($in-level, 'title', {:$addClass, :$target, :$text } )
-    }
-
-    multi sub handle (Pod::Block::Named $node where $node.name eq 'SUBTITLE', Int $in-level, Processed $pf --> Str ) {
-        my $addClass = ($node.config && $node.config<class> ?? ' ' ~ $node.config<class> !! '');
-        my $content = $node.contents[0].contents[0].Str;
-        $pf.completion($in-level, 'subtitle', {:$addClass, :$content } )
-    }
-
-    multi sub handle (Pod::Block::Named $node where $node.name eq 'Html' , Int $in-level, Processed $pf--> Str ) {
-        $pf.completion($in-level, 'raw', {:contents( [~] $node.contents>>.&handle($in-level, $pf, HTML) ) } )
-    }
-
-    multi sub handle (Pod::Block::Named $node where .name eq 'output', Int $in-level, Processed $pf  --> Str ) {
-        $pf.completion($in-level, 'output', {:contents( [~] $node.contents>>.&handle($in-level, $pf, Output) ) } )
-    }
-
-    multi sub handle (Pod::Block::Para $node, Int $in-level, Processed $pf, Context $context where * == Output  --> Str ) {
-        $pf.completion($in-level, 'raw', {:contents( [~] $node.contents».&handle($in-level, $pf ) ) } )
-    }
-
-    multi sub handle (Pod::Block::Para $node, Int $in-level, Processed $pf , Context $context? = None --> Str ) {
-        my $addClass = ($node.config && $node.config<class> ?? ' ' ~ $node.config<class> !! '');
-        $pf.completion($in-level, 'para', {:$addClass, :contents( [~] $node.contents>>.&handle($in-level, $pf, $context ) ) } )
-    }
-
-    multi sub handle (Pod::Block::Para $node, Int $in-level, Processed $pf, Context $context where * != None  --> Str ) {
-        $pf.completion($in-level, 'raw', {:contents( [~] $node.contents>>.&handle($in-level, $pf, $context) ) } )
-    }
-
-    multi sub handle (Pod::Block::Table $node, Int $in-level, Processed $pf  --> Str ) {
-        my $addClass = ($node.config && $node.config<class> ?? ' ' ~ $node.config<class> !! '');
-        my @headers = gather for $node.headers { take .&handle($in-level, $pf ) };
-        $pf.completion($in-level,  'table', {
-                :$addClass,
-                :caption( $node.caption ?? $node.caption.&handle($in-level, $pf ) !! ''),
-                :headers( +@headers ?? %( :cells( @headers ) ) !! Nil ),
-                :rows( [ gather for $node.contents -> @r {
-                    take %( :cells( [ gather for @r { take .&handle($in-level, $pf ) } ] )  )
-                } ] ),
-            } )
-    }
-
-    multi sub handle (Pod::Heading $node, Int $in-level, Processed $pf --> Str ) {
-        my $addClass = ($node.config && $node.config<class> ?? ' ' ~ $node.config<class> !! '');
-        my $level = $node.level;
-        my $text = [~] $node.contents>>.&handle($in-level, $pf, Heading);
-        my $target = $pf.register-toc( :$level, :$text );
-        $pf.completion($in-level, 'heading', {
-            :$level,
-            :$text,
-            :$addClass,
-            :$target,
-            :top( $pf.top )
-        })
-    }
-
-    multi sub handle (Pod::Item $node, Int $in-level is copy, Processed $pf --> Str  ) {
-        my $addClass = ($node.config && $node.config<class> ?? ' ' ~ $node.config<class> !! '');
-        my $level = $node.level - 1;
-        while $level < $in-level {
-            --$in-level;
-            $pf.itemlist[$in-level]  ~= rendition('list', {:items( $pf.itemlist.pop )} )
-        }
-        while $level >= $in-level {
-            $pf.itemlist[$in-level] = []  unless $pf.itemlist[$in-level]:exists;
-            ++$in-level
-        }
-        $pf.itemlist[$in-level - 1 ].push: rendition('item', {:$addClass, :contents([~] $node.contents>>.&handle($in-level, $pf ) ) } );
-        return '' # explicitly return an empty string because callers expecting a Str
-    }
-
-    # note no template needed
-    multi sub handle (Pod::Raw $node, Int $in-level, Processed $pf --> Str ) {
-        rendition('raw', {:contents( [~] $node.contents>>.&handle($in-level, $pf ) ) } )
-    }
-
-    multi sub handle (Str $node, Int $in-level, Processed $pf, Context $context? = None --> Str ) {
-        rendition('escaped', {:contents(~$node)})
-    }
-
-    multi sub handle (Str $node, Int $in-level, Processed $pf, Context $context where * == HTML --> Str ) {
-        rendition('raw', {:contents(~$node)})
-    }
-
-    multi sub handle (Nil) {
-        die 'Nil';
-    }
-
-    multi sub handle (Pod::Config $node, Int $in-level, Processed $pf  --> Str ) {
-        $pf.completion($in-level, 'comment',{:contents($node.type ~ '=' ~ $node.config.perl) } )
-    }
-
-    multi sub handle (Pod::FormattingCode $node, Int $in-level, Processed $pf, Context $context where * == Raw   --> Str ) {
-        $pf.completion($in-level, 'raw', {:contents( [~] $node.contents>>.&handle($in-level, $pf, $context) ) } )
-    }
-
-    multi sub handle (Pod::FormattingCode $node where .type eq 'B', Int $in-level, Processed $pf, Context $context = None   --> Str ) {
-        my $addClass = $node.config && $node.config<class> ?? $node.config<class> !! '';
-        $pf.completion($in-level, 'format-b',{:$addClass, :contents( [~] $node.contents>>.&handle($in-level, $pf, $context) ) })
-    }
-
-    multi sub handle (Pod::FormattingCode $node where .type eq 'C', Int $in-level, Processed $pf, Context $context? = None   --> Str ) {
-        my $addClass = ($node.config && $node.config<class> ?? ' ' ~ $node.config<class> !! '');
-        $pf.completion($in-level, 'format-c', {:$addClass, :contents([~] $node.contents>>.&handle($in-level, $pf, $context ) ) } )
-    }
-
-    multi sub handle (Pod::FormattingCode $node where .type eq 'C', Int $in-level, Processed $pf, Context $context where * ~~ Index   --> Str ) {
-        $pf.completion($in-level, 'format-c-index', {:contents( [~] $node.contents>>.&handle($in-level, $pf ) )})
-    }
-
-    multi sub handle (Pod::FormattingCode $node where .type eq 'E', Int $in-level, Processed $pf, Context $context? = None   --> Str ) {
-        $pf.completion($in-level, 'raw', {:contents( [~] $node.meta.map({ when Int { "&#$_;" }; when Str { "&$_;" }; $_ }) ) } )
-    }
-
-    multi sub handle (Pod::FormattingCode $node where .type eq 'Z', Int $in-level, Processed $pf, $context = None   --> Str ) {
-        $pf.completion($in-level, 'zero',{:contents([~] $node.contents>>.&handle($in-level, $pf, $context)) } )
-    }
-
-    multi sub handle (Pod::FormattingCode $node where .type eq 'I', Int $in-level, Processed $pf, Context $context = None   --> Str ) {
-        my $addClass = $node.config && $node.config<class> ?? $node.config<class> !! '';
-        $pf.completion($in-level, 'format-i',{:$addClass, :contents( [~] $node.contents>>.&handle($in-level, $pf, $context) ) })
-    }
-
-    multi sub handle (Pod::FormattingCode $node where .type eq 'X', Int $in-level, Processed $pf, Context $context = None   --> Str ) {
-        my $addClass = $node.config && $node.config<class> ?? $node.config<class> !! '';
-        my $text = [~] $node.contents>>.&handle($in-level, $pf, $context);
-        my $place = [~] $node.meta;
-        my $target = $pf.register-index( :$text, :$place );
-        $pf.completion($in-level, 'format-x',{:$addClass, :$text, :$target,  :header( $context ~~ Heading ) })
-    }
-
-    multi sub handle (Pod::FormattingCode $node where .type eq 'N', Int $in-level, Processed $pf, Context $context = None --> Str ) {
-        my $text = [~] $node.contents>>.&handle($in-level, $pf,$context);
-        $pf.completion($in-level, 'format-n', $pf.register-footnote(:$text) )
-    }
-
-    multi sub handle (Pod::FormattingCode $node where .type eq 'L', Int $in-level, Processed $pf, Context $context = None   --> Str ) {
-        my $addClass = ($node.config && $node.config<class> ?? ' ' ~ $node.config<class> !! '');
-        my $content = [~] $node.contents>>.&handle($in-level, $pf, $context);
-        my $target = $node.meta eqv [] | [""] ?? $content !! $node.meta;
-        $pf.links.push: $target;
-        # link handling needed here to deal with local links in global-link context
-
-        $pf.completion($in-level, 'format-l', {:$target, :$addClass, :contents([~] $node.contents>>.&handle($in-level, $pf, $context ) ) } )
-    }
-
-    multi sub handle (Pod::FormattingCode $node where .type eq 'R', Int $in-level, Processed $pf, Context $context = None   --> Str ) {
-        my $addClass = ($node.config && $node.config<class> ?? ' ' ~ $node.config<class> !! '');
-        $pf.completion($in-level, 'format-r', {:$addClass, :contents([~] $node.contents>>.&handle($in-level, $pf, $context ) ) } )
-    }
-
-    multi sub handle (Pod::FormattingCode $node where .type eq 'T', Int $in-level, Processed $pf, Context $context = None   --> Str ) {
-        my $addClass = ($node.config && $node.config<class> ?? ' ' ~ $node.config<class> !! '');
-        $pf.completion($in-level, 'format-t', {:$addClass, :contents([~] $node.contents>>.&handle($in-level, $pf, $context ) ) } )
-    }
-
-    multi sub handle (Pod::FormattingCode $node where .type eq 'K', Int $in-level, Processed $pf, Context $context? = None   --> Str ) {
-        my $addClass = ($node.config && $node.config<class> ?? ' ' ~ $node.config<class> !! '');
-        $pf.completion($in-level, 'format-k', {:$addClass, :contents([~] $node.contents>>.&handle($in-level, $pf, $context ) ) } )
-    }
-
-    multi sub handle (Pod::FormattingCode $node where .type eq 'U', Int $in-level, Processed $pf, Context $context = None   --> Str ) {
-        my $addClass = ($node.config && $node.config<class> ?? ' ' ~ $node.config<class> !! '');
-        $pf.completion($in-level, 'format-u', {:$addClass, :contents([~] $node.contents>>.&handle($in-level, $pf, $context ) ) } )
-    }
-
-    multi sub handle (Pod::FormattingCode $node where .type eq 'V', Int $in-level, Processed $pf, Context , $context = None  --> Str ) {
-        $pf.completion($in-level, 'raw', {:contents([~] $node.contents>>.&handle($in-level, $pf, $context ) ) } )
-    }
-
-    =begin takeout
-    #| the following format codes are not in the POD documentation, but in Synopsis
-    #| the following is code from BigPage.pm6, on which this module is based
-    multi sub handle (Pod::FormattingCode $node where .type eq 'F', Int $in-level, Processed $pf, $context = None   --> Str ) {
-        my $addClass = ($node.config && $node.config<class> ?? ' ' ~ $node.config<class> !! '');
-        $pf.completion($in-level, 'format-f', {:$addClass, :contents($node.contents>>.&handle($in-level, $pf, $context ) ) } );
-    }
-    # mustache would be:
-    # <span class="filename{{# addClass }} {{ addClass }}{{/ addClass }}">{{ content }}</span>
-
-    multi sub handle (Pod::FormattingCode $node where .type eq 'P', $context = None, :$pod-name?, :$part-number?, :$toc-counter?) {
-        my $content = $node.contents>>.&handle($context).Str;
-        my $link = $node.meta eqv [] | [""] ?? $content !! $node.meta;
-
-        use LWP::Simple;
-        my @url = LWP::Simple.parse_url($link);
-        my $doc;
-        given @url[0] {
-            when 'http' | 'https' {
-                $doc = LWP::Simple.get($link);
-            }
-            when 'file' {
-                $doc = slurp(@url[3]);
-            }
-            when '' {
-                $doc = slurp(@url[3]);
-            }
-        }
-        if $doc {
-            given @url[3].split('.')[*-1] {
-                when 'txt' { return '<pre>' ~ $doc.&escape-markup ~ '</pre>'; }
-                when 'html' | 'xhtml' { return $doc }
-            }
-        }
-        warn "did not inline $link";
-        q:c{<a href="{$link}">{$content}</a>}
-    }
-
-
-        # NYI
-        # multi sub handle (Pod::Block::Ambient $node) {
-        #   $node.perl.say;
-        #   $node.contents>>.&handle;
-        # }
-    =end takeout
-
-} # end of Processed class
-
-method processed-instance(:$name, :$pod-tree, Bool :$debug) { Processed.new(:$name, :$pod-tree, :$debug) }
+method processed-instance(:$name, :$pod-tree ) { PodCache::Processed.new(:$name, :$pod-tree, :$!debug, :templater($engine), :$!verbose, :$!global-links ) }
