@@ -1,7 +1,7 @@
 use Template::Mustache;
 unit class PodCache::Engine;
 has $!default;
-has %!tmpl = (
+has %.tmpl = (
     #| templates defined here without explicit html
     #| markup specific templates defined in mustache files.
     #| simple ones can be overidden by mustache files
@@ -19,10 +19,10 @@ has Str $!rendering;
 # list of the templates needed (not defined as short templates below)
 has @!template-list = <
     block-code comment footnotes format-b format-c format-i format-k format-l format-n
-    format-r format-t format-u format-x heading index item list main notimplemented
-    output para section subtitle table title toc
+    format-r format-t format-u format-x heading index item list meta notimplemented
+    output para section subtitle table title toc file-wrap body-wrap
     >;
-has @!over-ridden = ();
+has @.over-ridden = ();
 
 submethod BUILD( :$!default, :$!templates, :$!rendering,  :$!verbose = False, :$!debug = False ) {}
 

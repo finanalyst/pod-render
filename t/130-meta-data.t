@@ -5,13 +5,14 @@ use PodCache::Render;
 use PodCache::Processed;
 
 plan 2;
-my $fn = 'headings-test-pod-file_0';
+my $fn = 'meta-data-test-pod-file_0';
 
 constant REP = 't/tmp/ref';
 constant DOC = 't/tmp/doc/';
 
 my Pod::To::Cached $cache .= new(:path(REP)); # dies if no cache
 my PodCache::Processed $pr;
+my Str $rv;
 
 sub cache_test(Str $fn is copy, Str $to-cache --> PodCache::Processed ) {
     (DOC ~ "$fn.pod6").IO.spurt: $to-cache;
@@ -24,33 +25,26 @@ sub cache_test(Str $fn is copy, Str $to-cache --> PodCache::Processed ) {
 $pr = cache_test(++$fn, q:to/PODEND/);
     =begin pod
 
-    =head1 Heading 1
-
-    =head2 Heading 1.1
-
-    =head2 Heading 1.2
-
-    =head1 Heading 2
-
-    =head2 Heading 2.1
-
-    =head2 Heading 2.2
-
-    =head2 <a href="/routine/message#class_Exception">(Exception) method message</a>
-
-    =head3 Heading 2.2.1
-
-    =head3 X<Heading> 2.2.2
-
-    =head1 Heading C<3>
+    There is no meta data here
 
     =end pod
     PODEND
 
-my $html = $pr.pod-body.subst(/\s+/,' ',:g).trim;
+is $pr.render-meta, '', 'No meta data is rendered';
 
-#put $html;
+$pr = cache_test(++$fn, q:to/PODEND/);
+    =begin pod
+
+    This text has no footnotes or indexed item.
+    =AUTHOR An author is named
+
+    =SUMMARY This page is about Perl 6
+    =end pod
+    PODEND
+
+$rv = $pr.render-meta.subst(/\s+/,' ',:g).trim;
 #--MARKER-- Test 1
-like $html, /'h2 id="#t_2_2"' .+ '"u">Heading 2.2'/, 'Heading 2.2 has expected id';
-#--MARKER-- Test 2
-like $html, /'class="indexed-header">Heading' .+ '2.2.2</a>' / , 'Heading 2.2.2 is indexed';
+like $rv, /
+    \s* '<meta name="author" value="An author' .+ '"' .+ '/>'
+    .+ '<meta name="summary" value="This page' .+ '/>'
+    /, 'meta is rendered';

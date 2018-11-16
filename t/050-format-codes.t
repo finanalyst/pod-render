@@ -4,7 +4,7 @@ use Pod::To::Cached;
 use PodCache::Render;
 use PodCache::Processed;
 
-plan 19;
+plan 21;
 my $fn = 'format-codes-test-pod-file_0';
 
 constant REP = 't/tmp/ref';
@@ -19,8 +19,19 @@ sub cache_test(Str $fn is copy, Str $to-cache --> PodCache::Processed ) {
     my Pod::To::Cached $cache .=new(:path( REP ));
     $cache.update-cache;
     my PodCache::Render $pr .= new(:path( REP ) );
-    $pr.processed-instance(:name("$fn"), :pod-tree($pr.pod("$fn")));
+    $pr.processed-instance( :name($fn) );
 }
+
+$pr = cache_test(++$fn, q:to/PODEND/);
+    =begin pod
+
+    This text has no footnotes or indexed item.
+
+    =end pod
+    PODEND
+
+is $pr.render-footnotes, '', 'No footnotes are rendered';
+is $pr.render-index, '', 'No index is rendered';
 
 $pr = cache_test(++$fn, q:to/PODEND/);
     =begin pod

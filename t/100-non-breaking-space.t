@@ -19,7 +19,7 @@ sub cache_test(Str $fn is copy, Str $to-cache --> PodCache::Processed ) {
     my Pod::To::Cached $cache .=new(:path( REP ));
     $cache.update-cache;
     my PodCache::Render $pr .= new(:path( REP ) );
-    $pr.processed-instance(:name("$fn"), :pod-tree($pr.pod("$fn")));
+    $pr.processed-instance( :name($fn) );
 }
 
 $pr = cache_test(++$fn, q:to/PODEND/);

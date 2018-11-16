@@ -58,17 +58,17 @@ use  PodCache::Processed;
 my PodCache::Processed $pf;
 
 #--MARKER-- Test 4
-lives-ok { $pf = $renderer.processed-instance(:name<a-pod-file>, :pod-tree( $pod ) ) }, 'Processed file instance is created';
+lives-ok { $pf = $renderer.processed-instance(:name<a-pod-file> ) }, 'Processed file instance is created';
 $renderer.debug = True;
 #--MARKER-- Test 5
-output-like { $renderer.processed-instance(:name<a-pod-file>, :pod-tree( $pod ) ) }, / 'pod-tree is:' /, 'Debug info is given';
+output-like { $renderer.processed-instance(:name<a-pod-file> ) }, / 'pod-tree is:' /, 'Debug info is given';
 $renderer.debug = False;
 #--MARKER-- Test 6
 like $pf.pod-body.subst(/\s+/,' ', :g).trim,
     /'<section name="pod">' \s* '<h1 class="title" id="#__top">This is a title</h1>' \s* '<p>Some text</p>' \s* '</section>'/,
     'simple pod rendered';
 
-$pf = $renderer.processed-instance(:name<a-second-pod-file>, :pod-tree( $renderer.pod('a-second-pod-file') ));
+$pf = $renderer.processed-instance(:name<a-second-pod-file>);
 #--MARKER-- Test 7
 like $pf.pod-body, /
     '<h1 class="title" id="#__top">More and more</h1>'

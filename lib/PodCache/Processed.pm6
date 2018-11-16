@@ -6,6 +6,7 @@ unit class PodCache::Processed;
     has Str $.name;
     has Str $.title is rw = '';
     has Str $.sub-title is rw = '';
+    has Str $.path; # may/may not exist, but is path of original document
     has Str $.top; # target for TITLE
     has $.pod-tree; # cached pod
     has Str $.pod-body; # generated html
@@ -17,8 +18,10 @@ unit class PodCache::Processed;
     has Int @.counters is default(0);
     has Bool $.debug is rw;
     has Bool $.verbose;
-    has @.itemlist = ();
+    has @.itemlist = (); # for multilevel lists
+    has @.metalist = ();
     has Bool $!global-links;
+
     my PodCache::Engine $engine;
 
     submethod BUILD  (
@@ -27,7 +30,8 @@ unit class PodCache::Processed;
         :$!debug = False,
         :$!verbose = False,
         :$templater,
-        :$!global-links
+        :$!global-links,
+        :$!path = '',
         ) { $engine = $templater }
 
     submethod TWEAK {
@@ -54,6 +58,7 @@ unit class PodCache::Processed;
         $target
     }
     method render-index(-->Str) {
+        return '' unless +%!index.keys; #No render without any keys
         $engine.rendition( 'index', { :index([gather for %!index.sort {  take %(:text(.key), :refs( [.value.sort] )) } ]) }  )
     }
     method !register-link(:$text!, :$link!, :$place) {
@@ -67,7 +72,15 @@ unit class PodCache::Processed;
         (:$fnTarget, :$fnNumber, :$retTarget).hash
     }
     method render-footnotes(--> Str){
+        return '' unless +@!footnotes; # no rendering of code if no footnotes
         $engine.rendition('footnotes', { :notes( @!footnotes ) } )
+    }
+    method register-meta( :$name, :$value ) {
+        push @!metalist: %( :$name, :$value )
+    }
+    method render-meta {
+        return '' unless +@!metalist;
+        $engine.rendition('meta', { :meta( @!metalist ) })
     }
     method process-pod {
         say "Processing pod for $.name" if $!verbose;
@@ -99,7 +112,7 @@ unit class PodCache::Processed;
         $rv ~= $engine.rendition($key, %params);
     }
 
-    my enum Context ( None => 0, Index => 1 , Heading => 2, HTML => 3, Raw => 4, Output => 5);
+    my enum Context <None Index Heading HTML Raw Output Config>;
 
     #| Multi for handling different types of Pod blocks.
     multi sub handle (Pod::Block::Code $node, Int $in-level, PodCache::Processed $pf  --> Str ) {
@@ -132,12 +145,22 @@ unit class PodCache::Processed;
         $pf.completion($in-level, 'subtitle', {:$addClass, :$content } )
     }
 
+    multi sub handle (Pod::Block::Named $node where $node.name ~~ any(<VERSION DESCRIPTION AUTHOR COPYRIGHT SUMMARY>),
+        Int $in-level, PodCache::Processed $pf --> Str ) {
+        $pf.register-meta(:name($node.name.lc), :value($node.contents[0].contents[0].Str));
+        $pf.completion($in-level, 'zero', {:content(' ') } ) # make sure any list is correctly ended.
+    }
+
     multi sub handle (Pod::Block::Named $node where $node.name eq 'Html' , Int $in-level, PodCache::Processed $pf--> Str ) {
         $pf.completion($in-level, 'raw', {:contents( [~] $node.contents>>.&handle($in-level, $pf, HTML) ) } )
     }
 
     multi sub handle (Pod::Block::Named $node where .name eq 'output', Int $in-level, PodCache::Processed $pf  --> Str ) {
         $pf.completion($in-level, 'output', {:contents( [~] $node.contents>>.&handle($in-level, $pf, Output) ) } )
+    }
+
+    multi sub handle (Pod::Block::Named $node where .name eq 'Configuration', Int $in-level, PodCache::Processed $pf  --> Str ) {
+        $pf.completion($in-level, 'output', {:contents( [~] $node.contents>>.&handle($in-level, $pf, Config) ) } )
     }
 
     multi sub handle (Pod::Block::Para $node, Int $in-level, PodCache::Processed $pf, Context $context where * == Output  --> Str ) {

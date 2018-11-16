@@ -1,0 +1,19 @@
+=begin Configuration
+{{!
+    This template is not for rendering pod to something else, but to generate pod.
+    It is not recommended to over-ride this template.
+}}
+
+=TITLE Index of Perl 6 Documentation
+
+=SUBTITLE Links to the pod files in the document cache. Listed alphabetically.
+
+{{# items }}
+{{# header }}=head{{ level }} {{ text }}{{/ header }}
+{{# item }}=item L<{{ title }}|{{ name }}.html>
+{{ subtitle }}
+{{ toc }}
+{{/ item }}
+{{# items }}
+
+=end Configuration
