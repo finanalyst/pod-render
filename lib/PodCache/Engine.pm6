@@ -19,7 +19,7 @@ has Str $!rendering;
 # list of the templates needed (not defined as short templates below)
 has @!template-list = <
     block-code comment footnotes format-b format-c format-i format-k format-l format-n
-    format-r format-t format-u format-x heading index item list meta notimplemented
+    format-r format-t format-u format-x global-indexation-file heading index indexation-file item list meta notimplemented
     output para section subtitle table title toc file-wrap body-wrap
     >;
 has @.over-ridden = ();

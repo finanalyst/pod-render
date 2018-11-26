@@ -1,0 +1,14 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <title>{{ title }}</title>
+        <meta charset="UTF-8" />
+        <link rel="stylesheet" type="text/css" href="assets/pod.css" media="screen" title="default" />
+    </head>
+    <body class="pod">
+        <div class="pod-body{{^ toc }} no-toc{{/ toc }}">
+            {{{ body }}}
+        </div>
+        {{# path }}<footer>Rendered from {{ path }}</footer>{{/ path }}
+    </body>
+</html>

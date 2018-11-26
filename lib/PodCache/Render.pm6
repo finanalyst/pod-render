@@ -10,6 +10,7 @@ code is moved to templates.
 
 All templates can be over-ridden.
 
+Pod file names are assumed to have no spaces in them.
 
 =begin SYNOPSIS
 
@@ -21,14 +22,15 @@ All templates can be over-ridden.
         :output<path-to-output>,
         :rendering<html>,
         :assets<path-to-assets-folder>,
+        :config<path-to-config-folder>,
         );
 
     # Utility  functions
 
-    $renderer.template-test;
-    $renderer.gen-templates('path-for-template-output');
-    $renderer.gen-index-files('path-for-the-pod6-output');
-    $renderer.test-index('path-to-config');
+    $renderer.templates-changed;
+    $renderer.gen-templates;
+    $renderer.gen-index-files;
+    $renderer.test-index;
 
 =end SYNOPSIS
 =item new
@@ -52,7 +54,8 @@ All templates can be over-ridden.
 
 =item output
 =item2 the path where output is sent
-=item2 default is a directory with the same name as C<rendering>
+=item2 default is a directory with the same name as C<rendering> in the current working directory
+=item2 if C<output> does not exist, then a Fatal Exception will be thrown.
 
 =item assets
 =item2 path to a directory which may have subdirectories, eg.  C<js>, C<css>, C<images>
@@ -87,60 +90,51 @@ The file-wrap template is called with the following elements:
 
 =head Configuration
 
-By default - that is without a config file - a single index file, called C<index.pod6>, is generated with the documents in the top directory of the cache listed by
+By default - that is without any configuration file(s) - a single index file, called C<index.B<ext>>, is generated with the documents
+in the top directory of the cache listed by
 TITLE, followed by the SUBTITLE, followed by the Table of Content for the cache file.
 If the cache has subdirectories, then the name of the directory is made into a title, and the files under it are listed as above.
 
-A separate file called C<global-index.pod6> is generated containing
+A separate file called C<global-index.B<ext>> is generated containing
 the indexed elements from all the pod-files in the cache.
 
-These two pod files are then converted by the renderer into html (by default), but if a different rendering has been specified, they will follow those rendering
+These two files are rendered into html (by default), but if a different rendering has been specified, they will follow those rendering
 templates.
 
-If a C<config> directory is provided, Render will look for C<*.pod6> files and consider them customised index files.
+If a C<config> directory is provided, Render will look for C<*.yaml> files and consider them customised index files.
 
-Each will be converted from C<name.pod6> to C<name.B<ext>> where B<ext> is C<html> by default, but could
-be C<md> if the rendering is to Markdown. The configuration files are themselves rendered using the template C<config-file>, which can be amended
+Each will be converted from C<name.yaml> to C<name.B<ext>> where B<ext> is C<html> by default, but could, eg,
+be C<md> if the rendering is to Markdown.
+
+The indexation files are rendered using the template C<indexation>, which can be amended
 as required.
 
-For an html page, one of the configuarations should typically be C<index.html>. It is for the user to ensure that C<index.pod6> contains links to other
-index files.
+For an html page, one of the configuarations should typically be C<index.html>.
 
-The structure of the configuration file is as follows
-
-V<=begin> Configuration
-
-V<=TITLE> Text for title
-V<=SUBTITLE> text for a preamble
-
-V<=head> text for section heading
-
-Text about section
-V<=item> filename :link-name<link> :toc<False>
-V<=item> filename2
-
-V<=head> next section header
-etc etc
-V<=end> Configuration
+For more information, generate a template configuration file into a directory (see below).
 
 =head Utilities
 
-=item template-test
+=item templates-changed
 =item2 Generates a list of template names that have been over-ridden.
 
-=item gen-templates('path-name')
-=item2 'path-name' is interpreted as a directory, which must exist. All the mustache templates will be copied into it.
+=item gen-templates
+=item2 'templates/rendering' is interpreted as a directory, which must exist. All the mustache templates will be copied into it.
 =item2 Only the templates required may be kept. Some templates, such as C<zero> do not need to be over-ridden as there is no rendering data.
 
-=item gen-index-files('path-name')
-=item2 'path-name' is a directory that must exist
+=item gen-index-files
+=item2 C<config> is a writable directory that must exist, defaults to C<output>
 =begin item2
-the two index files C<index.pod6> and C<global-index.pod6> are generated in that directory. The intent is to provide templates for
-customised config files
+    the two index files C<index.yaml> and C<global-index.yaml> are generated in that directory. The intent is to provide templates for
+    customised config files. For more information generate a template.
 =end item2
+=item2 The index filenames themselves are generated using the C<indexation> template
+=item2 the extension of the final index files will be the same as C<rendering>
+=item2 the filename of the index file will be same as the +.yaml files in the config directory
 
-=item test-index('path-name')
-=item2 'path-name' is a directory that should contain the config files.
+=item test-index-files
+=item2 C<config> is a directory that should contain the config files.
+=item2 if no .yaml files are in the config directory, the method will throw a Fatal Exception.
 =item2 each pod6 file will be read and the filenames from V<=item> lines will be compared to the files in the doc-cache
 =item2 any file present in I<the doc-cache>, but B<not> included in I<a config file> will be output into a config file called C<misc.pod6>
 =item2 any filename included in I<a config file>, but B<not> in I<the doc-cache>, will be listed in a file called C<error.txt>
@@ -152,12 +146,15 @@ use nqp;
 use Pod::To::Cached;
 use PodCache::Engine;
 use PodCache::Processed;
+use YAMLish;
+use Data::Dump;
 
 no precompilation;
 unit class PodCache::Render is Pod::To::Cached;
 
 constant TEMPLATES = 'resources/templates';
 constant RENDERING = 'html';
+constant ASSETS = 'resources/assets';
 
 has PodCache::Engine $.engine;
 has Bool $!global-links; # whether links must be unique to collection (True), or to Pod file (Default False)
@@ -166,13 +163,21 @@ has Bool $.debug is rw;
 has $!templates;
 has $!rendering;
 has $!output;
+has Bool $!output-test; # caches the result of the output directory test
+has $!config;
+has $!assets;
+
 has %.pfiles;
-has @.global-index;
+has @!names; # ordered array of hash of names in cache, with directory paths
+has %.global-index;
+has @.global-links;
 
 submethod BUILD(
     :$!templates = TEMPLATES,
     :$!rendering = RENDERING,
     :$!output = $!rendering,
+    :$!config = $!rendering,
+    :$!assets = ASSETS,
     :$!global-links = False,
     :$!verbose = False,
     :$!debug = False,
@@ -183,33 +188,39 @@ submethod TWEAK {
     $!engine.verify-templates;
 }
 
-method gen-templates($path) {
-    die "｢$path｣ must be a directory." unless $path.IO ~~ :d;
-    for $!engine.tmpl.kv -> $nm, $str { "$path/$nm.mustache".IO.spurt: $str }
+method gen-templates {
+    die "It does not seem that a new template and rendering directory have been given"
+        unless ( TEMPLATES ~ '/' ~ RENDERING ).IO ne "$!templates/$!rendering".IO;
+    die "｢$!templates/$!rendering｣ must be a writable directory for Templates." unless "$!templates/$!rendering".IO ~~ :d;
+    for $!engine.tmpl.kv -> $nm, $str { "$!templates/$!rendering/$nm.mustache".IO.spurt: $str }
 }
 
-method gen-index-files($path) {
-    die "｢$path｣ must be a directory." unless $path.IO ~~ :d;
+method gen-index-files {
+    die "｢$!config｣ must be a writable directory." unless $!config.IO ~~ :d;
+    self.make-names unless +@!names;
     self.process-cache;
-    my @names =
+    my @params ;
+    my $last-head = '';
+    for @!names {
+        @params.push( %(:header( %(:level(.<level>), :text(.<dir>))))) if .<dir> ne $last-head;
+        $last-head = .<dir>;
+        @params.push( %(:item(  :filename( .<name> ) )) )
+    };
+    @params
+        .push( %(:head( %( :level(1), :text('Global Index'), ) ) ) )
+        .push(%(:item( %(:title('Index to all items in source files'), :link("global-index.$!rendering"), ) ) ) )
+        ; # add to the bottom a link to the global index file.
+    "$!config/index.yaml".IO.spurt: data('index-start') ~ save-yaml(%( :content( @params ) ,) ).subst(/^^  '---' $$ \s /,''); #take the top --- off the yaml file, its in data.
+    "$!config/global-index.yaml".IO.spurt: data('global-index-start') ~ save-yaml(%( :content( proforma( +@.pfiles.keys ) ) ,) ).subst(/^^  '---' $$ \s /,'')
+}
+
+method make-names {
+    @!names =
         (gather for $.files.keys {
             take %( :name($_), :v([ .split('/')  ]) )  #gives a hash with origin and sort target
         }).sort({ .<v>.elems, .<v>.[0], .<v>.[1], .<v>.[2], .<v>.[3], .<v>.[4], .<v>.[5], .<v>.[6] }) #shortest first, then by part
             .map( { %(:name(.<name>), :level(.<v>.elems), :fn( .<v>.pop ), :dir( .<v>.join('/') ) ) } ) # rewrite elements to a hash
         ;    #should be no more than 7 layers
-    my @items ;
-    my $last-head = '';
-    for @names {
-        @items.push( %(:header( %(:level(.<level>), :text(.<dir>))))) if .<dir> ne $last-head;
-        $last-head = .<dir>;
-        @items.push( %{:item( %(
-            :title( %!pfiles{ .<name> }.title),
-            :name( .<name> ),
-            :subtitle( %!pfiles{ .<name> }.sub-title ),
-            :toc( %!pfiles{ .<name> }.render-toc )
-        ))} )
-    };
-    "$path/index.pod6".IO.spurt: $!engine.rendition('config-file', {:items( @items )} )
 }
 
 method body-wrap( PodCache::Processed $pf --> Str ) {
@@ -227,7 +238,14 @@ method body-wrap( PodCache::Processed $pf --> Str ) {
 }
 
 multi method file-wrap( PodCache::Processed $pf, :$name = $pf.name ) {
-    "$!output/$name.html".IO.spurt: $!engine.rendition('file-wrap', {
+    unless $!output-test {
+        $!output.IO.mkdir or die "Cannot create output directory at $!output";
+        $!output-test = True;
+        "$!output/assets".IO.mkdir or die "Cannot create assets subdirectory of $!output";
+        for $!assets.IO.dir { .copy: "$!output/assets/" ~ .basename; }
+    }
+    # note that if $name has / chars, the file will be in a subdirectory
+    "$!output/$name.$!rendering".IO.spurt: $!engine.rendition('file-wrap', {
         :$name,
         :orig-name($pf.name),
         :title($pf.title),
@@ -241,7 +259,7 @@ multi method file-wrap( PodCache::Processed $pf, :$name = $pf.name ) {
     } )
 }
 
-method processed-instance(:$name ) {
+method processed-instance( :$name ) {
     PodCache::Processed.new(
         :$name,
         :pod-tree( self.pod($name) ),
@@ -254,12 +272,315 @@ method processed-instance(:$name ) {
 }
 
 method process-cache {
-    return if +%.pfiles.keys;
+    return if +%.pfiles.keys; # only do this once.
     for $.files.keys -> $filename {
-        %.pfiles{$filename} = self.processed-instance( $filename );
+        my $pf = self.processed-instance( :name($filename) );
+        %.pfiles{$filename} = %(
+            :$pf ,
+        # todo include code for creating a single file
+            'link' => "$filename.$!rendering",
+        );
+        for $pf.index.kv -> $entry, @data {
+            %!global-index{$entry} = Array unless %!global-index{$entry}:exists;
+            for @data -> %item {
+                %!global-index{$entry}.push: %(:target( "$filename.$!rendering" ~ %item<target>), :place( %item<place>), )
+            }
+        }
+        for $pf.links {
+            @!global-links.push: %(|$_, :source($filename))
+        }
     }
 }
 
-method template-test {
+method templates-changed {
     $!engine.over-ridden, "from $!templates/$!rendering"
+}
+
+method links-test {
+    self.process-cache;
+#    self.create-collection;
+}
+
+method test-index-files( :$quiet  = False  ) {
+    self.process-cache;
+    # index files
+    # No need to test global-index files because if there are items not in the section headers,
+    # then they will be put into the Misc section
+    my @index-files = dir($!config, :test(/ '.yaml' /) );
+    unless +@index-files {
+        note 'No index.yaml files so will generate defaults' if $!verbose;
+        return
+            %( :not-in-index( $.files.keys ),
+                :not-in-cache( Nil ),
+                :duplicates-in-index( Nil ),
+                :index-and-cache( Nil ),
+                :errors( 'No index.yaml files, so will generate default files' , ) )
+    }
+    my $residue = SetHash.new: $.files.keys;
+    my $cache = Set.new: $.files.keys;
+    my @index-and-cache = ();
+    my @not-in-cache = ();
+    my @duplicates-in-index = ();
+    my @errors = ();
+    my %single-index;
+    for @index-files -> $fn {
+        %single-index = load-yaml( $fn.slurp );
+        CATCH {
+            default {
+                @errors.push: "With ｢{ $fn.basename }｣: { .payload }"
+            }
+        } # leaves for block if error found
+        if %single-index<type>:exists and %single-index<type> eq 'global-index' {
+            #TODO
+        }
+        else {
+            @errors.push("With $fn: No title") unless %single-index<title>:exists;
+            for %single-index<content>.kv -> $entry, %info {
+                @errors.push("With $fn: No header text at entry # $entry")
+                    if %info<header>:exists and %info<header><text>:!exists;
+                if %info<item>:exists {
+                    if %info<item><filename>:exists {
+                        my $ifn = %info<item><filename>;
+                        if $residue{ $ifn }-- {
+                            @index-and-cache.push: ~$fn
+                        }
+                        else {
+                            if $cache{ $ifn } {
+                                @duplicates-in-index.push: ~$ifn
+                            }
+                            else {
+                                @not-in-cache.push: ~$ifn
+                            }
+                        }
+                    }
+                    else {
+                        @errors.push("With $fn: No item filename or ( link & title) at entry # $entry")
+                            unless %info<item><link>:exists and  %info<item><title>:exists
+                    }
+                }
+            }
+        }
+    }
+    unless $quiet {
+        note "Errors found: " ~
+            (+@errors ?? ("\n\t" ~ @errors.join("\n\t")) !! "None" );
+        note "Pod sources summary";
+        note "Number in cache and in config file(s): ", +@index-and-cache;
+        note "Source names in cache but not in config file(s): " ~
+            (+$residue.keys ?? ("\n\t" ~ $residue.keys.join("\n\t")) !! "None" );
+        note "Source names duplicated in config file(s): ",
+            (+@duplicates-in-index ?? ("\n\t" ~ @duplicates-in-index.join("\n\t")) !! "None" );
+        note "Source names not in cache but in config file(s): ",
+            (+@not-in-cache ?? ("\n\t" ~ @not-in-cache.join("\n\t")) !! "None" );
+    }
+    %( :not-in-index( $residue.keys>>.Str ),
+        :@not-in-cache,
+        :@duplicates-in-index,
+        :@index-and-cache,
+        :@errors )
+}
+
+method write-indices {
+    my %test = self.test-index-files(:quiet( ! $!verbose)); # make sure we can read the index files
+    exit note "Cannot write index files because: " ~ %test<errors>.join("\n\t") if +%test<errors>;
+    # if no yaml files in Config (default Output), generate two in Output
+    my @index-files = dir($!config, :test(/ '.yaml' /) );
+    unless +@index-files {
+        #defaults when no given in CONFIG
+        self.gen-index-files;
+        @index-files = <index.yaml global-index.yaml>.map( "$!config/$_".IO );
+        # these do not need to be tested because they are generated correctly
+    }
+    for @index-files {
+        my %params = self.process-index( $_  );
+        my $fn = .basename.substr( 0, *-5 ); #get rid of yaml
+        "$!output/$fn.$!rendering".IO.spurt:
+            $!engine.rendition((%params<type> eq 'global-index' ?? 'global-indexation-file' !! 'indexation-file'), %params);
+    }
+
+}
+
+method process-index( $fn ) {
+    my %index = load-yaml( $fn.slurp );
+    my %params = :title(%index<title>), :body( Str ), :path( ~$fn );
+    my $body := %params<body>;
+    $body ~=
+        $!engine.rendition('title', { :text(%index<title>), :target<__top> })
+        ~ ( %index<subtitle>:exists ?? $!engine.rendition('subtitle', {:contents( %index<subtitle>)}) !! '' );
+
+    with %index<type> and %index<type> eq 'global-index' {
+        my SetHash $residue .= new: %.global-index.keys;
+        for %index<contents> -> %entry {
+            $body ~= $!engine.rendition('global-indexation-heading', {
+                :level( %entry<level>),
+                :text(%entry<head>),
+            } );
+            my $rg = %entry<regex>;
+            my @sect-entries;
+            for $residue.keys {
+                if m/<$rg>/ {
+                    $residue{$_}--; # remove from set at first match
+                    @sect-entries.push: %( :text( $_ ), :refs( %.global-index{$_} )  )
+                }
+            }
+            $body ~= $!engine.rendition('global-indexation-defn-list', %( :list(@sect-entries)))
+        }
+        if +$residue.keys {
+            # Not all the index entries have been used up by the regexes
+            $body ~= $!engine.rendition('indexation-heading', {
+                :2level,
+                :text('Miscellaneous'),
+            } );
+            my @sect-entries;
+            for $residue.keys {
+                @sect-entries.push: %( :text( $_ ), :refs( %.global-index{$_} )  )
+            }
+            $body ~= $!engine.rendition('global-indexation-defn-list', %( :list(@sect-entries)))
+        }
+    }
+    else {
+        $body ~=
+            [~] gather for %index<contents> -> %entry {
+                take $!engine.rendition('indexation-heading', {
+                    :level( %entry<head><level>),
+                    :text(%entry<head><text>) ,
+                    :subtitle( %entry<head><subtitle> // ' '),
+                } ) if %entry<head>:exists;
+                take $!engine.rendition('indexation-entry', self.pf-params( %entry<item> ) )
+                    if %entry<item>:exists;
+            }
+        ;
+    }
+    %params
+}
+
+method pf-params( %info ) {
+    if $.files{%info<filename>}:exists {
+        my PodCache::Processed $pf = $.files{ %info<filename> }<pf>;
+        %(
+            :title( %info<title> // $pf.title // 'No title' ),
+            :subtitle( %info<subtitle> // $pf.sub-title // '' ),
+            :toc( (%info<toc>:exists or (%info<toc>:exists and %info<toc>)) ?? $pf.toc !! ' ' ), # default = no <toc> = show toc
+            :link( $.files{ %info<filename> }<link> )
+        )
+    }
+    else { # this is used when another file is linked to, in which case a title should be provided and a link.
+        %(
+            :title( %info<title> // 'No file name or title defined' ),
+            :subtitle( %info<subtitle> // '' ),
+            :toc( ' ' ), #No toc where no pod
+            :link( %info<link> // ' ' )
+        )
+    }
+}
+
+sub proforma( Int $elems --> Array ) {
+    given $elems {
+        when * <= 10 {
+            [
+                %( :head('A(a) to P(p)'),  :regex( " ^ [A-P,a-p]  " ), :2level, ),
+                %( :head('Q(q) to Z(z)'),  :regex( " ^ [Q-Z,q-z]  " ), :2level, ),
+            ]
+        }
+        when 10 < * <= 50 {
+            [
+                %( :head('A(a) to E(e)'),  :regex( " ^ [A-E,a-e]  " ), :2level, ),
+                %( :head('F(f) to J(j)'),  :regex( " ^ [F-J,f-j]  " ), :2level, ),
+                %( :head('K(k) to O(o)'),  :regex( " ^ [K-O,k-o]  " ), :2level, ),
+                %( :head('P(p) to S(s)'),  :regex( " ^ [P-S,p-s]  " ), :2level, ),
+                %( :head('T(t) to Z(z)'),  :regex( " ^ [T-Z,t-z]  " ), :2level, ),
+            ]
+        }
+        when * > 50 {
+            [
+                %( :head('A(a) to B(b)'),  :regex( " ^ [A-B,a-b]  " ), :2level, ),
+                %( :head('C(c) to D(d)'),  :regex( " ^ [C-D,c-d]  " ), :2level, ),
+                %( :head('E(e) to F(f)'),  :regex( " ^ [E-F,e-f]  " ), :2level, ),
+                %( :head('G(g) to H(h)'),  :regex( " ^ [G-H,g-h]  " ), :2level, ),
+                %( :head('I(i) to J(j)'),  :regex( " ^ [I-J,i-j]  " ), :2level, ),
+                %( :head('K(k) to L(l)'),  :regex( " ^ [K-L,k-l]  " ), :2level, ),
+                %( :head('M(m) to N(n)'),  :regex( " ^ [M-N,m-n]  " ), :2level, ),
+                %( :head('O(o) to P(p)'),  :regex( " ^ [O-P,o-p]  " ), :2level, ),
+                %( :head('Q(q) to R(r)'),  :regex( " ^ [Q-R,q-r]  " ), :2level, ),
+                %( :head('S(s) to T(t)'),  :regex( " ^ [S-T,s-t]  " ), :2level, ),
+                %( :head('U(u) to V(V)'),  :regex( " ^ [U-V,u-v]  " ), :2level, ),
+                %( :head('W(w) to Z(z)'),  :regex( " ^ [W-Z,w-z]  " ), :2level, ),
+            ]
+        }
+    }
+}
+
+sub data($item) {
+    given $item {
+        when 'index-start' {
+            q:to/DATA/;
+                ---
+                # This is a configuration file that will be interpreted by C<PodCache::Render>
+                # to create an index file containing all the files in the document cache
+                # This file is generated with the intent that it can be a template for customised
+                # index files.
+                # Styling and presentation information should be contained in the template
+                # used to render the index viz., indexation-file.
+                # The indexation-file template should typically be over-ridden.
+
+                # The structure of an index file is as follows
+                # - title: text in the title # mandatory
+                # - subtitle: paragraph immediately following the title # optional
+                # - head:
+                #    level: an optional attribute and will be used for the header level
+                #    text: a required attribute. Is the text of the header
+                #    subtitle: optional. Paragraph following heading.
+                # - item:
+                #      filename: the name of file in the document cache
+                #        # if the filename is missing, no error is generated
+                #        # if the file corresponding to the filename does not exist, no error is generated
+                #        # Consequently, links other files, such as other index files, can be included by
+                #        # ommiting the filename, or using one not in the cache, whilst providing
+                #        # a link and text  (see below)
+                #     # the following are optional and when absent, the data is taken from the pod file attributes
+                #     title: the text to be used to refer to the filename in place of the pod's TITLE attribute
+                #     subtitle: text used instead of the pod's SUBTITLE attribute
+                #     link: the link to be used to refer to the file instead of the URL generated from the pod file name
+                #     toc: whether or not to include the pod file's toc. Defaults to True
+
+                title: Perl 6 Documentation
+                subtitle: Links to the rendered pod files, one for each file in the document cache. Listed alphabetically.
+                    Where pod files are arranged in sub-directories, the path is used as a heading.
+
+                DATA
+        }
+        when 'global-index-start' {
+            q:to/DATA/
+                ---
+                # This is a configuration file that will be interpreted by C<PodCache::Render>
+                # to create a global index file containing all entries indexed in all the sources in the document cache
+                # This file is generated with the intent that it can be a template for customised
+                # index files.
+                # Styling and presentation information should be contained in the template
+                # used to render the global-index viz., global-indexation-file.
+                # The global-indexation-file template should typically be over-ridden for custom css and js
+
+                # The structure of the global-index.yaml file is as follows
+                # - type: global-index # mandatory for the global-index
+                #    # the intent of this option is to allow a different rendering for
+                #    # landing page index files and global-indices
+                # - title: To be in the title # mandatory
+                # - subtitle: Paragraph immediately following the title # optional
+                # - head: Separator between sections of index
+                #   level: The heading level - typically 2
+                #   text: The text in the header
+                #   regex: The regex to be applied to the index entry for inclusion in this section
+                #  # To generate the rendered global-index, the index entries are sorted alphabetically, compared
+                #  # to the regex, and added to the first section whose regex matches.
+                #
+                # Any missing indexed entries not matched by a section will be added to
+                # a Miscellaneous Section at the end.
+
+                type: global-index
+                title: Global Index of Perl 6 Documentation
+                subtitle: Links to indexed items in all files in document collection.
+
+                DATA
+        }
+    }
 }

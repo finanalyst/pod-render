@@ -7,18 +7,17 @@ use PodCache::Processed;
 plan 2;
 my $fn = 'code-test-pod-file_0';
 
-constant REP = 't/tmp/ref';
-constant DOC = 't/tmp/doc/';
+constant REP = 't/tmp/rep';
+constant DOC = 't/tmp/doc';
 
 my Pod::To::Cached $cache .= new(:path(REP)); # dies if no cache
 my PodCache::Processed $pr;
 
 sub cache_test(Str $fn is copy, Str $to-cache --> PodCache::Processed ) {
-    (DOC ~ "$fn.pod6").IO.spurt: $to-cache;
-    my Pod::To::Cached $cache .=new(:path( REP ));
-    $cache.update-cache;
-    my PodCache::Render $pr .= new(:path( REP ) );
-    $pr.processed-instance( :name($fn) );
+    (DOC ~ "/$fn.pod6").IO.spurt: $to-cache;
+    my PodCache::Render $ren .= new(:path( REP ) );
+    $ren.update-cache;
+    $ren.processed-instance( :name($fn) );
 }
 
 $pr = cache_test(++$fn, q:to/PODEND/);
@@ -54,7 +53,8 @@ $pr = cache_test(++$fn, q:to/PODEND/);
     =end pod
     PODEND
 #--MARKER-- Test 2
-like $pr.pod-body.subst(/\s+/,' ',:g).trim, /'<p>' \s* 'This is an ordinary paragraph' \s* '</p>'
+like $pr.pod-body.subst(/\s+/,' ',:g).trim, /
+    '<p>' \s* 'This is an ordinary paragraph' \s* '</p>'
     \s* '<pre class="pod-block-code">While this is not'
     \s* 'This is a code block</pre>'
     \s* '<h1 id="#t_1">'

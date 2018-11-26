@@ -1,6 +1,7 @@
 use v6.c;
 use PodCache::Engine;
 constant TOP = '__top';
+use Data::Dump;
 
 unit class PodCache::Processed;
     has Str $.name;
@@ -61,8 +62,9 @@ unit class PodCache::Processed;
         return '' unless +%!index.keys; #No render without any keys
         $engine.rendition( 'index', { :index([gather for %!index.sort {  take %(:text(.key), :refs( [.value.sort] )) } ]) }  )
     }
-    method !register-link(:$text!, :$link!, :$place) {
-        @!links.push: %( :$text, :$link, :$place)
+    method register-link(:$content! is copy, :$target!) {
+        $content= $target if $content ~~ / ^ \s* $ /;
+        @!links.push: %( :$content, :$target)
     }
     method register-footnote(:$text! --> Hash ) {
         my $fnNumber = +@!footnotes + 1;
@@ -112,7 +114,7 @@ unit class PodCache::Processed;
         $rv ~= $engine.rendition($key, %params);
     }
 
-    my enum Context <None Index Heading HTML Raw Output Config>;
+    my enum Context <None Index Heading HTML Raw Output>;
 
     #| Multi for handling different types of Pod blocks.
     multi sub handle (Pod::Block::Code $node, Int $in-level, PodCache::Processed $pf  --> Str ) {
@@ -159,8 +161,8 @@ unit class PodCache::Processed;
         $pf.completion($in-level, 'output', {:contents( [~] $node.contents>>.&handle($in-level, $pf, Output) ) } )
     }
 
-    multi sub handle (Pod::Block::Named $node where .name eq 'Configuration', Int $in-level, PodCache::Processed $pf  --> Str ) {
-        $pf.completion($in-level, 'output', {:contents( [~] $node.contents>>.&handle($in-level, $pf, Config) ) } )
+    multi sub handle (Pod::Block::Named $node where .name eq 'Raw', Int $in-level, PodCache::Processed $pf  --> Str ) {
+        $pf.completion($in-level, 'raw', {:contents( [~] $node.contents>>.&handle($in-level, $pf, Output) ) } )
     }
 
     multi sub handle (Pod::Block::Para $node, Int $in-level, PodCache::Processed $pf, Context $context where * == Output  --> Str ) {
@@ -219,7 +221,7 @@ unit class PodCache::Processed;
     }
 
     # note no template needed
-    multi sub handle (Pod::Raw $node, Int $in-level, PodCache::Processed $pf --> Str ) {
+    multi sub handle (Pod::Raw $node, Int $in-level, PodCache::Processed $pf --> Str ) { say 'is raw';
         $engine.rendition('raw', {:contents( [~] $node.contents>>.&handle($in-level, $pf ) ) } )
     }
 
@@ -286,10 +288,9 @@ unit class PodCache::Processed;
     multi sub handle (Pod::FormattingCode $node where .type eq 'L', Int $in-level, PodCache::Processed $pf, Context $context = None   --> Str ) {
         my $addClass = ($node.config && $node.config<class> ?? ' ' ~ $node.config<class> !! '');
         my $content = [~] $node.contents>>.&handle($in-level, $pf, $context);
-        my $target = $node.meta eqv [] | [""] ?? $content !! $node.meta;
-        $pf.links.push: $target;
+        my $target = $node.meta eqv [] | [""] ?? $content !! $node.meta[0];
+        $pf.register-link( :$content, :$target );
         # link handling needed here to deal with local links in global-link context
-
         $pf.completion($in-level, 'format-l', {:$target, :$addClass, :contents([~] $node.contents>>.&handle($in-level, $pf, $context ) ) } )
     }
 

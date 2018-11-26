@@ -7,19 +7,18 @@ use PodCache::Processed;
 plan 21;
 my $fn = 'format-codes-test-pod-file_0';
 
-constant REP = 't/tmp/ref';
-constant DOC = 't/tmp/doc/';
+constant REP = 't/tmp/rep';
+constant DOC = 't/tmp/doc';
 
 my Pod::To::Cached $cache .= new(:path(REP)); # dies if no cache
 my PodCache::Processed $pr;
 my Str $rv;
 
 sub cache_test(Str $fn is copy, Str $to-cache --> PodCache::Processed ) {
-    (DOC ~ "$fn.pod6").IO.spurt: $to-cache;
-    my Pod::To::Cached $cache .=new(:path( REP ));
-    $cache.update-cache;
-    my PodCache::Render $pr .= new(:path( REP ) );
-    $pr.processed-instance( :name($fn) );
+    (DOC ~ "/$fn.pod6").IO.spurt: $to-cache;
+    my PodCache::Render $ren .= new(:path( REP ) );
+    $ren.update-cache;
+    $ren.processed-instance( :name($fn) );
 }
 
 $pr = cache_test(++$fn, q:to/PODEND/);
@@ -30,7 +29,9 @@ $pr = cache_test(++$fn, q:to/PODEND/);
     =end pod
     PODEND
 
+#--MARKER-- Test 1
 is $pr.render-footnotes, '', 'No footnotes are rendered';
+#--MARKER-- Test 2
 is $pr.render-index, '', 'No index is rendered';
 
 $pr = cache_test(++$fn, q:to/PODEND/);
@@ -44,7 +45,7 @@ $pr = cache_test(++$fn, q:to/PODEND/);
     PODEND
 
 $rv = $pr.pod-body.subst(/\s+/,' ',:g).trim;
-#--MARKER-- Test 1
+#--MARKER-- Test 3
 like $rv, /
     '<section name="pod">'
     \s* '<p>'
@@ -55,7 +56,7 @@ like $rv, /
     /, 'footnote references in text with and without spaces';
 
 $rv = $pr.render-footnotes.subst(/\s+/,' ',:g).trim;
-#--MARKER-- Test 2
+#--MARKER-- Test 4
 like $rv, /
     \s* '<div class="footnotes">'
     \s* '<ol>'
@@ -76,7 +77,7 @@ $pr = cache_test(++$fn, q:to/PODEND/);
     PODEND
 
 $rv = $pr.pod-body.subst(/\s+/,' ',:g).trim;
-#--MARKER-- Test 3
+#--MARKER-- Test 5
 like $rv, /
     '<section name="pod">'
     \s* '<p>'
@@ -90,7 +91,7 @@ like $rv, /
     /, 'X format in text';
 
 $rv = $pr.render-index.subst(/\s+/,' ',:g).trim;
-#--MARKER-- Test 4
+#--MARKER-- Test 6
 like $rv, /
     '<div id="index">'
     \s* '<dl class="index">'
@@ -114,7 +115,7 @@ $pr = cache_test(++$fn, q:to/PODEND/);
     PODEND
 
 $rv = $pr.pod-body.subst(/\s+/,' ',:g).trim;
-#--MARKER-- Test 5
+#--MARKER-- Test 7
 like $rv, /
     '<section name="pod">'
     \s* '<p>'
@@ -122,7 +123,7 @@ like $rv, /
     \s+ '<strong>say</strong>'
     \s+ 'in between words.'
     /, 'bold when separated with a space';
-#--MARKER-- Test 6
+#--MARKER-- Test 8
 like $rv, /
     'I want to add a format<strong>next to a word</strong>' \s* 'in the middle.'
     /, 'bold without spaces';
@@ -138,7 +139,7 @@ $pr = cache_test(++$fn, q:to/PODEND/);
     PODEND
 
 $rv = $pr.pod-body.subst(/\s+/,' ',:g).trim;
-#--MARKER-- Test 7
+#--MARKER-- Test 9
 like $rv, /
     '<section name="pod">'
     \s* '<p>'
@@ -146,7 +147,7 @@ like $rv, /
     \s+ '<em>say</em>'
     \s+ 'in between words.'
     /, 'Important when separated with a space';
-#--MARKER-- Test 8
+#--MARKER-- Test 10
 like $rv, /
     'I want to add a format<em>next to a word</em>' \s* 'in the middle.'
     /, 'Important without spaces';
@@ -162,7 +163,7 @@ $pr = cache_test(++$fn, q:to/PODEND/);
     PODEND
 
 $rv = $pr.pod-body.subst(/\s+/,' ',:g).trim;
-#--MARKER-- Test 9
+#--MARKER-- Test 11
 like $rv, /
     '<section name="pod">'
     \s* '<p>'
@@ -170,7 +171,7 @@ like $rv, /
     \s+ '<u>say</u>'
     \s+ 'in between words.'
     /, 'Unusual when separated with a space';
-#--MARKER-- Test 10
+#--MARKER-- Test 12
 like $rv, /
     'I want to add a format<u>next to a word</u>'
     \s* 'in the middle.'
@@ -185,7 +186,7 @@ $pr = cache_test(++$fn, q:to/PODEND/);
     PODEND
 
 $rv = $pr.pod-body.subst(/\s+/,' ',:g).trim;
-#--MARKER-- Test 11
+#--MARKER-- Test 13
 like $rv, /
     '<section name="pod">'
     \s* '<p>'
@@ -201,7 +202,7 @@ $pr = cache_test(++$fn, q:to/PODEND/);
     =end pod
     PODEND
 $rv = $pr.pod-body.subst(/\s+/,' ',:g).trim;
-#--MARKER-- Test 12
+#--MARKER-- Test 14
 like $rv, /
     '<section name="pod">'
     \s* '<p>'
@@ -218,7 +219,7 @@ $pr = cache_test(++$fn, q:to/PODEND/);
     PODEND
 
 $rv = $pr.pod-body.subst(/\s+/,' ',:g).trim;
-#--MARKER-- Test 13
+#--MARKER-- Test 15
 like $rv, /
     '<section name="pod">'
     \s* '<p>'
@@ -235,7 +236,7 @@ $pr = cache_test(++$fn, q:to/PODEND/);
     PODEND
 
 $rv = $pr.pod-body.subst(/\s+/,' ',:g).trim;
-#--MARKER-- Test 14
+#--MARKER-- Test 16
 like $rv, /
     '<section name="pod">'
     \s* '<p>'
@@ -252,7 +253,7 @@ $pr = cache_test(++$fn, q:to/PODEND/);
     PODEND
 
 $rv = $pr.pod-body.subst(/\s+/,' ',:g).trim;
-#--MARKER-- Test 15
+#--MARKER-- Test 17
 like $rv, /
     '<section name="pod">'
     \s* '<p>'
@@ -273,7 +274,7 @@ $pr = cache_test(++$fn, q:to/PODEND/);
     PODEND
 
 $rv = $pr.pod-body.subst(/\s+/,' ',:g).trim;
-#--MARKER-- Test 16
+#--MARKER-- Test 18
 like $rv, /
     '<section name="pod">'
     \s* [ .+? 'use of the ' [ '&laquo;' | '&#171;' ]  ' and ' [ '&raquo;' | '&#187;' ] ' characters' ] **6
@@ -287,7 +288,7 @@ $pr = cache_test(++$fn, q:to/PODEND/);
     PODEND
 
 $rv = $pr.pod-body.subst(/\s+/,' ',:g).trim;
-#--MARKER-- Test 17
+#--MARKER-- Test 19
 like $rv, /
     '<section name="pod">'
     \s* '<p>'
@@ -302,7 +303,7 @@ $pr = cache_test(++$fn, q:to/PODEND/);
     PODEND
 
 $rv = $pr.pod-body.subst(/\s+/,' ',:g).trim;
-#--MARKER-- Test 18
+#--MARKER-- Test 20
 like $rv, /
     '<section name="pod">'
     \s* '<p>'
@@ -319,7 +320,7 @@ $pr = cache_test(++$fn, q:to/PODEND/);
     PODEND
 
 $rv = $pr.pod-body.subst(/\s+/,' ',:g).trim;
-#--MARKER-- Test 19
+#--MARKER-- Test 21
 like $rv, /
     '<section name="pod">'
     \s* '<p>'
