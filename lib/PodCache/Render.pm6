@@ -23,6 +23,7 @@ Pod file names are assumed to have no spaces in them.
         :rendering<html>,
         :assets<path-to-assets-folder>,
         :config<path-to-config-folder>,
+        :clear-output,
         );
 
     # Utility  functions
@@ -69,6 +70,11 @@ Pod file names are assumed to have no spaces in them.
 =item2 boolean default False
 =item2 if true href links in <a> tags must all be relative to collection (podfile appended to local link)
 =item2 if false links need only be unique relative to Processed
+
+=item clear-output
+=item2 boolean default False
+=item2 Empty output directory, if it already exists
+=item2 The intent is for only tainted files to be overwritten, and for existing files to be left
 
 =head1 Usage
 
@@ -147,7 +153,9 @@ use Pod::To::Cached;
 use PodCache::Engine;
 use PodCache::Processed;
 use YAMLish;
+use File::Directory::Tree;
 use Data::Dump;
+use LibCurl::Easy;
 
 no precompilation;
 unit class PodCache::Render is Pod::To::Cached;
@@ -164,6 +172,8 @@ has $!templates;
 has $!rendering;
 has $!output;
 has Bool $!output-test; # caches the result of the output directory test
+has Bool $.clear-output;
+
 has $!config;
 has $!assets;
 
@@ -181,6 +191,7 @@ submethod BUILD(
     :$!global-links = False,
     :$!verbose = False,
     :$!debug = False,
+    :$!clear-output = False,
     ) {}
 
 submethod TWEAK {
@@ -211,7 +222,7 @@ method gen-index-files {
         .push(%(:item( %(:title('Index to all items in source files'), :link("global-index.$!rendering"), ) ) ) )
         ; # add to the bottom a link to the global index file.
     "$!config/index.yaml".IO.spurt: data('index-start') ~ save-yaml(%( :content( @params ) ,) ).subst(/^^  '---' $$ \s /,''); #take the top --- off the yaml file, its in data.
-    "$!config/global-index.yaml".IO.spurt: data('global-index-start') ~ save-yaml(%( :content( proforma( +@.pfiles.keys ) ) ,) ).subst(/^^  '---' $$ \s /,'')
+    "$!config/global-index.yaml".IO.spurt: data('global-index-start') ~ save-yaml(%( :content( proforma( +%.global-index.keys ) ) ,) ).subst(/^^  '---' $$ \s /,'')
 }
 
 method make-names {
@@ -237,14 +248,21 @@ method body-wrap( PodCache::Processed $pf --> Str ) {
     })
 }
 
-multi method file-wrap( PodCache::Processed $pf, :$name = $pf.name ) {
+method file-wrap( PodCache::Processed $pf, :$name = $pf.name ) {
     unless $!output-test {
-        $!output.IO.mkdir or die "Cannot create output directory at $!output";
+        if $!clear-output {
+            rmtree $!output
+        }
+        unless "$!output/assets".IO.d {
+            mktree("$!output/assets") or die "Cannot create output directory at $!output/assets";
+            for $!assets.IO.dir { .copy: "$!output/assets/" ~ .basename }
+        }
         $!output-test = True;
-        "$!output/assets".IO.mkdir or die "Cannot create assets subdirectory of $!output";
-        for $!assets.IO.dir { .copy: "$!output/assets/" ~ .basename; }
     }
     # note that if $name has / chars, the file will be in a subdirectory
+    unless "$!output/$name".IO.dirname.IO ~~ :d {
+        mktree "$!output/$name".IO.dirname # make sure the sub-directory exists in the output directory
+    }
     "$!output/$name.$!rendering".IO.spurt: $!engine.rendition('file-wrap', {
         :$name,
         :orig-name($pf.name),
@@ -278,12 +296,14 @@ method process-cache {
         %.pfiles{$filename} = %(
             :$pf ,
         # todo include code for creating a single file
-            'link' => "$filename.$!rendering",
+            :link("$filename.$!rendering"),
         );
         for $pf.index.kv -> $entry, @data {
             %!global-index{$entry} = Array unless %!global-index{$entry}:exists;
             for @data -> %item {
-                %!global-index{$entry}.push: %(:target( "$filename.$!rendering" ~ %item<target>), :place( %item<place>), )
+                %!global-index{$entry}.push: %(:target( "$filename.$!rendering" ~ %item<target>), :place( %item<place>), );
+                # global-links is for testing, but index items should have correct links
+                #@!global-links.push: %(:target( "$filename.$!rendering" ~ %item<target>), :place( %item<place>), :source($filename),)
             }
         }
         for $pf.links {
@@ -298,12 +318,41 @@ method templates-changed {
 
 method links-test {
     self.process-cache;
-#    self.create-collection;
+    my LibCurl::Easy $curl .=new(:!verbose, :followlocation );
+    my @responses =();
+    for @.global-links.list -> %info {
+        $curl.setopt(:URL( %info<target>));
+        $curl.perform;
+        CATCH {
+            when X::LibCurl {
+                @responses.push: qq:to/RESPONSE/;
+                    Error: ｢{ %info<target> }｣ in source ｢{ %info<source> }｣ with label ｢{ %info<content> }｣
+                    generated response ｢{$curl.response-code}｣ with error ｢{$curl.error}｣
+                    RESPONSE
+            }
+        }
+        unless $curl.success  {
+            @responses.push(qq:to/ERROR/);
+            Error: ｢{ %info<target> }｣ in source ｢{ %info<source> }｣ with label ｢{ %info<content> }｣
+            generated response ｢{$curl.response-code}｣ with error ｢{$curl.error}｣
+            ERROR
+        }
+    }
+    note "Links responses are:\n", @responses.join("\n\t") if +@responses and $!verbose ;
+    @responses
+}
+
+method update-collection {
+    self.create-collection(self.list-files( Pod::To::Cached::Tainted ))
+}
+
+method create-collection(@names = %.pfiles.keys ) {
+    self.process-cache;
+    self.file-wrap( %.pfiles{$_}<pf> ) for @names
 }
 
 method test-index-files( :$quiet  = False  ) {
     self.process-cache;
-    # index files
     # No need to test global-index files because if there are items not in the section headers,
     # then they will be put into the Misc section
     my @index-files = dir($!config, :test(/ '.yaml' /) );
@@ -402,23 +451,23 @@ method write-indices {
 
 method process-index( $fn ) {
     my %index = load-yaml( $fn.slurp );
-    my %params = :title(%index<title>), :body( Str ), :path( ~$fn );
+    my %params = :title(%index<title>), :body( Str ), :path( ~$fn ), :type( %index<type> // 'normal' );
     my $body := %params<body>;
     $body ~=
-        $!engine.rendition('title', { :text(%index<title>), :target<__top> })
-        ~ ( %index<subtitle>:exists ?? $!engine.rendition('subtitle', {:contents( %index<subtitle>)}) !! '' );
+        $!engine.rendition('title', %( :text(%index<title>), :target<__top> ) )
+        ~ ( %index<subtitle>:exists ?? $!engine.rendition('subtitle', %(:contents( %index<subtitle>) ) ) !! '' );
 
     with %index<type> and %index<type> eq 'global-index' {
         my SetHash $residue .= new: %.global-index.keys;
-        for %index<contents> -> %entry {
-            $body ~= $!engine.rendition('global-indexation-heading', {
+        for %index<content>.list -> %entry {
+            $body ~= $!engine.rendition('global-indexation-heading', %(
                 :level( %entry<level>),
-                :text(%entry<head>),
-            } );
+                :text( %entry<head>),
+            ) );
             my $rg = %entry<regex>;
             my @sect-entries;
             for $residue.keys {
-                if m/<$rg>/ {
+                if m/ <$rg> / {
                     $residue{$_}--; # remove from set at first match
                     @sect-entries.push: %( :text( $_ ), :refs( %.global-index{$_} )  )
                 }
@@ -440,12 +489,12 @@ method process-index( $fn ) {
     }
     else {
         $body ~=
-            [~] gather for %index<contents> -> %entry {
-                take $!engine.rendition('indexation-heading', {
-                    :level( %entry<head><level>),
-                    :text(%entry<head><text>) ,
-                    :subtitle( %entry<head><subtitle> // ' '),
-                } ) if %entry<head>:exists;
+            [~] gather for %index<content>.list -> %entry {
+                take $!engine.rendition('indexation-heading', %(
+                    :level( %entry<header><level>),
+                    :text(%entry<header><text>) ,
+                    :subtitle( %entry<header><subtitle> // ''),
+                ) ) if %entry<header>:exists;
                 take $!engine.rendition('indexation-entry', self.pf-params( %entry<item> ) )
                     if %entry<item>:exists;
             }
@@ -455,21 +504,25 @@ method process-index( $fn ) {
 }
 
 method pf-params( %info ) {
-    if $.files{%info<filename>}:exists {
-        my PodCache::Processed $pf = $.files{ %info<filename> }<pf>;
+    if %info<filename>:exists and $.pfiles{%info<filename>}:exists {
+        my PodCache::Processed $pf = $.pfiles{ %info<filename> }<pf>;
+        # any link in the config file is ignored because it could distort links
+        # if there is a use case for specifying links in the config, this is where the
+        # code should probably exist. But links would need to be rewritten.
+
         %(
             :title( %info<title> // $pf.title // 'No title' ),
             :subtitle( %info<subtitle> // $pf.sub-title // '' ),
-            :toc( (%info<toc>:exists or (%info<toc>:exists and %info<toc>)) ?? $pf.toc !! ' ' ), # default = no <toc> = show toc
-            :link( $.files{ %info<filename> }<link> )
+            :toc( (%info<toc>:!exists or (%info<toc>:exists and %info<toc>)) ?? $pf.toc !! '' ), # default = no <toc> = show toc
+            :link( $.pfiles{ %info<filename> }<link> )
         )
     }
     else { # this is used when another file is linked to, in which case a title should be provided and a link.
         %(
             :title( %info<title> // 'No file name or title defined' ),
             :subtitle( %info<subtitle> // '' ),
-            :toc( ' ' ), #No toc where no pod
-            :link( %info<link> // ' ' )
+            :toc( '' ), #No toc where no pod
+            :link( %info<link> // '' )
         )
     }
 }
@@ -478,33 +531,33 @@ sub proforma( Int $elems --> Array ) {
     given $elems {
         when * <= 10 {
             [
-                %( :head('A(a) to P(p)'),  :regex( " ^ [A-P,a-p]  " ), :2level, ),
-                %( :head('Q(q) to Z(z)'),  :regex( " ^ [Q-Z,q-z]  " ), :2level, ),
+                %( :head('A(a) to P(p)'),  :regex( " ^ <[A..P,a..p]>  " ), :2level, ),
+                %( :head('Q(q) to Z(z)'),  :regex( " ^ <[Q..Z,q..z]>  " ), :2level, ),
             ]
         }
         when 10 < * <= 50 {
             [
-                %( :head('A(a) to E(e)'),  :regex( " ^ [A-E,a-e]  " ), :2level, ),
-                %( :head('F(f) to J(j)'),  :regex( " ^ [F-J,f-j]  " ), :2level, ),
-                %( :head('K(k) to O(o)'),  :regex( " ^ [K-O,k-o]  " ), :2level, ),
-                %( :head('P(p) to S(s)'),  :regex( " ^ [P-S,p-s]  " ), :2level, ),
-                %( :head('T(t) to Z(z)'),  :regex( " ^ [T-Z,t-z]  " ), :2level, ),
+                %( :head('A(a) to E(e)'),  :regex( " ^ <[A..E,a..e]>  " ), :2level, ),
+                %( :head('F(f) to J(j)'),  :regex( " ^ <[F..J,f..j]>  " ), :2level, ),
+                %( :head('K(k) to O(o)'),  :regex( " ^ <[K..O,k..o]>  " ), :2level, ),
+                %( :head('P(p) to S(s)'),  :regex( " ^ <[P..S,p..s]>  " ), :2level, ),
+                %( :head('T(t) to Z(z)'),  :regex( " ^ <[T..Z,t..z]>  " ), :2level, ),
             ]
         }
         when * > 50 {
             [
-                %( :head('A(a) to B(b)'),  :regex( " ^ [A-B,a-b]  " ), :2level, ),
-                %( :head('C(c) to D(d)'),  :regex( " ^ [C-D,c-d]  " ), :2level, ),
-                %( :head('E(e) to F(f)'),  :regex( " ^ [E-F,e-f]  " ), :2level, ),
-                %( :head('G(g) to H(h)'),  :regex( " ^ [G-H,g-h]  " ), :2level, ),
-                %( :head('I(i) to J(j)'),  :regex( " ^ [I-J,i-j]  " ), :2level, ),
-                %( :head('K(k) to L(l)'),  :regex( " ^ [K-L,k-l]  " ), :2level, ),
-                %( :head('M(m) to N(n)'),  :regex( " ^ [M-N,m-n]  " ), :2level, ),
-                %( :head('O(o) to P(p)'),  :regex( " ^ [O-P,o-p]  " ), :2level, ),
-                %( :head('Q(q) to R(r)'),  :regex( " ^ [Q-R,q-r]  " ), :2level, ),
-                %( :head('S(s) to T(t)'),  :regex( " ^ [S-T,s-t]  " ), :2level, ),
-                %( :head('U(u) to V(V)'),  :regex( " ^ [U-V,u-v]  " ), :2level, ),
-                %( :head('W(w) to Z(z)'),  :regex( " ^ [W-Z,w-z]  " ), :2level, ),
+                %( :head('A(a) to B(b)'),  :regex( " ^ <[A..B,a..b]>  " ), :2level, ),
+                %( :head('C(c) to D(d)'),  :regex( " ^ <[C..D,c..d]>  " ), :2level, ),
+                %( :head('E(e) to F(f)'),  :regex( " ^ <[E..F,e..f]>  " ), :2level, ),
+                %( :head('G(g) to H(h)'),  :regex( " ^ <[G..H,g..h]>  " ), :2level, ),
+                %( :head('I(i) to J(j)'),  :regex( " ^ <[I..J,i..j]>  " ), :2level, ),
+                %( :head('K(k) to L(l)'),  :regex( " ^ <[K..L,k..l]>  " ), :2level, ),
+                %( :head('M(m) to N(n)'),  :regex( " ^ <[M..N,m..n]>  " ), :2level, ),
+                %( :head('O(o) to P(p)'),  :regex( " ^ <[O..P,o..p]>  " ), :2level, ),
+                %( :head('Q(q) to R(r)'),  :regex( " ^ <[Q..R,q..r]>  " ), :2level, ),
+                %( :head('S(s) to T(t)'),  :regex( " ^ <[S..T,s..t]>  " ), :2level, ),
+                %( :head('U(u) to V(V)'),  :regex( " ^ <[U..V,u..v]>  " ), :2level, ),
+                %( :head('W(w) to Z(z)'),  :regex( " ^ <[W..Z,w..z]>  " ), :2level, ),
             ]
         }
     }

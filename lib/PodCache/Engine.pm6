@@ -18,9 +18,13 @@ has Str $!templates;
 has Str $!rendering;
 # list of the templates needed (not defined as short templates below)
 has @!template-list = <
-    block-code comment footnotes format-b format-c format-i format-k format-l format-n
-    format-r format-t format-u format-x global-indexation-file heading index indexation-file item list meta notimplemented
-    output para section subtitle table title toc file-wrap body-wrap
+    block-code body-wrap comment file-wrap footnotes
+    format-b format-c format-i format-k format-l
+    format-n format-r format-t format-u format-x
+    global-indexation-defn-list global-indexation-file global-indexation-heading heading index
+    indexation-entry indexation-file indexation-heading item list
+    meta notimplemented output para section
+    subtitle table title toc
     >;
 has @.over-ridden = ();
 
@@ -62,5 +66,6 @@ method rendition(Str $key, %params --> Str) {
         say %!tmpl{$key}.perl;
         say "end template";
     }
+    die "Cannot process non-existent template ｢$key｣" unless %!tmpl{$key}:exists;
     $!tmpl-engine.render( %!tmpl{$key}, %params, :literal );
 }

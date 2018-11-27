@@ -298,7 +298,9 @@ like $rv, /
 $pr = cache_test(++$fn, q:to/PODEND/);
     =begin pod
 
-    We can L<Link to a place|https://doc.perl6.org> with no problem.
+    We can L<Link to a place|https://docs.perl6.org> with no problem.
+
+    This L<link should fail|https://xxxxxioioioi.com> with a bad response code.
     =end pod
     PODEND
 
@@ -308,7 +310,7 @@ like $rv, /
     '<section name="pod">'
     \s* '<p>'
     \s* 'We can'
-    \s* '<a href="https://doc.perl6.org">Link to a place</a>'
+    \s* '<a href="https://docs.perl6.org">Link to a place</a>'
     \s* 'with no problem.'
     /, 'L format';
 

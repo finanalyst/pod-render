@@ -16,7 +16,8 @@
     "depends" : [
         "File::Directory::Tree",
         "JSON::Fast",
-        "Pod::To::Cached"
+        "Pod::To::Cached",
+        "LibCurl::Easy"
     ],
     "test-depends" : [
         "Test",

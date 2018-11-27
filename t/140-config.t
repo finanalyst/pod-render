@@ -40,31 +40,31 @@ lives-ok { $renderer .= new(:path(REP), :output( OUTPUT ), :config( CONFIG ) ) }
 $renderer.update-cache;
 
 my %test;
-#--MARKER-- Test 8
+#--MARKER-- Test 2
 lives-ok { %test = $renderer.test-index-files(:quiet) }, 'test non-existent index files';
-#--MARKER-- Test 9
+#--MARKER-- Test 3
 is-deeply %test<errors>, ('No index.yaml files, so will generate default files' , ), 'without files generated error';
 
-#--MARKER-- Test 10
+#--MARKER-- Test 4
 lives-ok {  $renderer.gen-index-files }, 'gen-index-files lives';
 
-#--MARKER-- Test 11
+#--MARKER-- Test 5
 ok (CONFIG ~ '/index.yaml').IO ~~ :f, 'index.yaml created';
-#--MARKER-- Test 12
+#--MARKER-- Test 6
 ok (CONFIG ~ '/global-index.yaml').IO ~~ :f, 'global-index.yaml created';
-#--MARKER-- Test 13
+#--MARKER-- Test 7
 stderr-like { %test = $renderer.test-index-files }, /
     'Errors found:' \s* 'None'
     .+ 'Number in cache' .+ \d+
     .+ 'not in config file(s):' \s* 'None'
     /, 'verbose sumary as expected';
-#--MARKER-- Test 14
+#--MARKER-- Test 8
 is +%test<duplicates-in-index>, 0, 'round-trip: no duplicates';
-#--MARKER-- Test 15
+#--MARKER-- Test 9
 is +%test<not-in-cache>, 0, 'round-trip: no non-cache';
-#--MARKER-- Test 16
+#--MARKER-- Test 10
 is +%test<not-in-index>, 0, 'round-trip: index covers all cache';
-#--MARKER-- Test 17
+#--MARKER-- Test 11
 is +%test<index-and-cache>, +$renderer.files.keys, 'round-trip: all files in index';
 
 (CONFIG ~ '/index.yaml').IO.spurt(q:to/ENDYAML/); # pseudo index
@@ -110,13 +110,13 @@ is +%test<index-and-cache>, +$renderer.files.keys, 'round-trip: all files in ind
     ENDYAML
 
 %test = $renderer.test-index-files(:quiet);
-#--MARKER-- Test 18
+#--MARKER-- Test 12
 is +%test<duplicates-in-index>, 2, 'pseudo index expected duplicates';
-#--MARKER-- Test 19
+#--MARKER-- Test 13
 is +%test<not-in-cache>, 3, 'pseudo index expected non-cache';
-#--MARKER-- Test 20
+#--MARKER-- Test 14
 is +%test<not-in-index>, +$renderer.files.keys - 6 , 'pseudo index expected index not covering cache';
-#--MARKER-- Test 21
+#--MARKER-- Test 15
 is +%test<index-and-cache>, 6, 'pseudo index expected in index and cache';
 
 (CONFIG ~ '/index2.yaml').IO.spurt(q:to/ENDYAML/); # pseudo index 2
@@ -138,13 +138,13 @@ is +%test<index-and-cache>, 6, 'pseudo index expected in index and cache';
     ENDYAML
 
 %test = $renderer.test-index-files(:quiet);
-#--MARKER-- Test 22
+#--MARKER-- Test 16
 is +%test<duplicates-in-index>, 2, 'multiple psuedo index expected duplicates';
-#--MARKER-- Test 23
+#--MARKER-- Test 17
 is +%test<not-in-cache>, 3, 'multiple psuedo index expected non-cache';
-#--MARKER-- Test 24
+#--MARKER-- Test 18
 is +%test<not-in-index>, +$renderer.files.keys - 10 , 'multiple psuedo index expected index not covering cache';
-#--MARKER-- Test 25
+#--MARKER-- Test 19
 is +%test<index-and-cache>, 10, 'multiple psuedo index expected in index and cache';
 
 # TODO some tests for global-index.

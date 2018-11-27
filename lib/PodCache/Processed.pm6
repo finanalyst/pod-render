@@ -5,8 +5,8 @@ use Data::Dump;
 
 unit class PodCache::Processed;
     has Str $.name;
-    has Str $.title is rw = '';
-    has Str $.sub-title is rw = '';
+    has Str $.title is rw;
+    has Str $.sub-title is rw;
     has Str $.path; # may/may not exist, but is path of original document
     has Str $.top; # target for TITLE
     has $.pod-tree; # cached pod
@@ -27,6 +27,7 @@ unit class PodCache::Processed;
 
     submethod BUILD  (
         :$!name,
+        :$!title = $!name,
         :$!pod-tree,
         :$!debug = False,
         :$!verbose = False,

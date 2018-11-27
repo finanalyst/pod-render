@@ -77,5 +77,16 @@ like $pf.pod-body, /
     /, 'title rendered';
 #--MARKER-- Test 9
 like $pf.render-toc.subst(/\s+/,' ', :g).trim,
-    /'<nav class="indexgroup">' \s* '<table id="TOC">' \s* '<caption>' \s* '<h2 id="TOC_Title">Table of Contents</h2></caption>' \s* '<tr class="toc-level-2">' \s* '<td class="toc-text">' \s* '<a href="#t_0_1">This is a heading</a>' \s* '</td>' \s* '</tr>' \s* '</table>' \s* '</nav>'/
+    /
+    '<nav class="indexgroup">'
+    \s* '<table id="TOC">'
+    \s* '<caption>'
+    \s* '<h2 id="TOC_Title">Table of Contents</h2></caption>'
+    \s* '<tr class="toc-level-2">'
+    \s* '<td class="toc-text">'
+    \s* '<a href="#t_0_1">This is a heading</a>'
+    \s* '</td>'
+    \s* '</tr>'
+    \s* '</table>'
+    \s* '</nav>'/
     , 'rendered simple toc';
