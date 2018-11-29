@@ -1,6 +1,6 @@
 {
     "perl" : "6.*",
-    "name" : "Pod::Render",
+    "name" : "PodCache::Module",
     "version" : "0.1.0",
     "author" : "Richard Hainsworth",
     "description" : "Render pod files from a cache.",
@@ -18,6 +18,9 @@
         "JSON::Fast",
         "Pod::To::Cached",
         "LibCurl::Easy"
+    ],
+    "provides": [
+        "assets/css/pod.css"
     ],
     "test-depends" : [
         "Test",

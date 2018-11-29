@@ -6,6 +6,8 @@ use PodCache::Render;
 use PodCache::Processed;
 plan 4;
 
+#temp $*CWD = 't/';
+
 constant REP = 't/tmp/rep';
 constant DOC = 't/tmp/doc';
 constant TEMPL = 't/tmp/templates';
@@ -13,9 +15,9 @@ constant TEMPL = 't/tmp/templates';
 rmtree TEMPL;
 mktree TEMPL ~ '/html';
 
-my $fn = 'basic-test-pod-file_0';
+my $fn = 'templates-test-pod-file_0';
 
-my Pod::To::Cached $cache .= new(:path(REP), :templates(TEMPL)); # dies if no cache
+my Pod::To::Cached $cache .= new(:path(REP)); # dies if no cache
 
 (TEMPL ~ "/html/para.mustache").IO.spurt: '<p class="special {{# addClass }} {{ addClass }}{{/ addClass }}">{{{ contents }}}</p>';
 

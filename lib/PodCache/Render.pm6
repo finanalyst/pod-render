@@ -15,6 +15,7 @@ Pod file names are assumed to have no spaces in them.
 =begin SYNOPSIS
 
     use PodCache::Render;
+    use Pod::To::Cached;
 
     my PodCache::Render $renderer .= new(
         :path<path-to-pod-cache>,
@@ -22,16 +23,26 @@ Pod file names are assumed to have no spaces in them.
         :output<path-to-output>,
         :rendering<html>,
         :assets<path-to-assets-folder>,
-        :config<path-to-config-folder>,
-        :clear-output,
+        :config<path-to-config-folder>
         );
+    my $ok = $renderer.update-cache; # identify new or changed pod sources
+    exit note('The following sources failed to compile', $renderer.list-files(Pod::To::Cached::Failed).join("/n/t")
+        unless $ok;
+
+    # if the collection needs to be recreated
+    $renderer.create-collection(:clear);
+
+    # to update an existing Collection
+    $renderer.update-collection; # will fail if the collection contains Pod sources that have failed to compile
 
     # Utility  functions
 
+    $renderer.verbose = True; # presume output is required for testing
     $renderer.templates-changed;
     $renderer.gen-templates;
     $renderer.gen-index-files;
     $renderer.test-index;
+    $renderer.links-test;
 
 =end SYNOPSIS
 =item new
@@ -71,10 +82,13 @@ Pod file names are assumed to have no spaces in them.
 =item2 if true href links in <a> tags must all be relative to collection (podfile appended to local link)
 =item2 if false links need only be unique relative to Processed
 
-=item clear-output
-=item2 boolean default False
-=item2 Empty output directory, if it already exists
-=item2 The intent is for only tainted files to be overwritten, and for existing files to be left
+=item create-collection(:clear)
+=item2 Creates a collection from scratch.
+=item2 Clear is False by default.
+=item2 Even for a first collection, update-collection is sufficient
+
+=item update-collection
+=item2 Will rewrite Rendered files for all sources marked as 'New' and 'Updated' in Cache
 
 =head1 Usage
 
@@ -145,6 +159,11 @@ For more information, generate a template configuration file into a directory (s
 =item2 any file present in I<the doc-cache>, but B<not> included in I<a config file> will be output into a config file called C<misc.pod6>
 =item2 any filename included in I<a config file>, but B<not> in I<the doc-cache>, will be listed in a file called C<error.txt>
 
+=item links-test
+=item2 This is an expensive test because
+=item3 the whole cache needs to be re-rendered and
+=item3 all the external links are visited using LibCurl
+
 =end pod
 
 use JSON::Fast;
@@ -159,8 +178,6 @@ use LibCurl::Easy;
 
 no precompilation;
 unit class PodCache::Render is Pod::To::Cached;
-
-constant ASSETS = 'resources/assets';
 
 has PodCache::Engine $.engine;
 has Bool $!global-links; # whether links must be unique to collection (True), or to Pod file (Default False)
@@ -184,13 +201,13 @@ submethod BUILD(
     :$rendering = Str,
     :$output = Str,
     :$config = Str,
-    :$!assets = ASSETS,
+    :$!assets = Str,
     :$!global-links = False,
     :$!verbose = False,
     :$!debug = False,
     :$!clear-output = False,
     ) {
-        $!engine .= new(:$templates, :$rendering);
+        $!engine .= new(:$templates, :$rendering,:$!verbose);
         $!rendering = $!engine.rendering; # this sequence so that default rendering is set only in Engine.pm6
         $!output = $output // $!rendering;
         $!config = $config // $!output;
@@ -243,16 +260,6 @@ method body-wrap( PodCache::Processed $pf --> Str ) {
 }
 
 method file-wrap( PodCache::Processed $pf, :$name = $pf.name ) {
-    unless $!output-test {
-        if $!clear-output {
-            rmtree $!output
-        }
-        unless "$!output/assets".IO.d {
-            mktree("$!output/assets") or die "Cannot create output directory at $!output/assets";
-            for $!assets.IO.dir { .copy: "$!output/assets/" ~ .basename }
-        }
-        $!output-test = True;
-    }
     # note that if $name has / chars, the file will be in a subdirectory
     unless "$!output/$name".IO.dirname.IO ~~ :d {
         mktree "$!output/$name".IO.dirname # make sure the sub-directory exists in the output directory
@@ -283,9 +290,9 @@ method processed-instance( :$name ) {
     )
 }
 
-method process-cache {
-    return if +%.pfiles.keys; # only do this once.
-    for $.files.keys -> $filename {
+method process-cache( @names = $.files.keys ) { # only process cache for Tainted and New files, if given
+    for @names -> $filename {
+        next if %.pfiles{$filename}:exists; # process each filename only once.
         my $pf = self.processed-instance( :name($filename) );
         %.pfiles{$filename} = %(
             :$pf ,
@@ -337,11 +344,38 @@ method links-test {
 }
 
 method update-collection {
-    self.create-collection(self.list-files( Pod::To::Cached::Tainted ))
+    my @files = self.list-files( Pod::To::Cached::Failed );
+    exit note( "The following pod sources failed\n", @files.join("\n\t") ) if +@files;
+    @files = self.list-files( Pod::To::Cached::New);
+    if +@files {
+        # if a new file has been added, then the index files need to be recreated
+        self.write-indices;
+    }
+    @files.append: self.list-files( Pod::To::Cached::Tainted ); # add to new files
+    self.create-collection( @files ) if +@files;
 }
 
-method create-collection(@names = %.pfiles.keys ) {
-    self.process-cache;
+method create-collection(@names = %.pfiles.keys, :$clear = False ) {
+    unless $!output-test {
+        if $clear {
+            rmtree $!output
+        }
+        unless "{$!output}/assets".IO ~~ :d {
+            mktree("$!output/assets") or die "Cannot create output directory at ｢{$!output}/assets｣";
+            with $!assets {
+                for $!assets.IO.dir {
+                    mktree .dirname unless .dirname.IO ~~ :d;
+                    .copy: "$!output/assets/"
+                }
+            }
+            else {
+                # no assets given, so copy pod.css
+                %?RESOURCES<assets/css/pod.css>.copy: "$!output/assets/pod.css"
+            }
+        }
+        $!output-test = True;
+    }
+    self.process-cache( @names );
     self.file-wrap( %.pfiles{$_}<pf> ) for @names
 }
 
