@@ -19,8 +19,8 @@
         "Pod::To::Cached",
         "LibCurl::Easy"
     ],
-    "provides": [
-        "assets/css/pod.css"
+    "resources": [
+        "assets/pod.css"
     ],
     "test-depends" : [
         "Test",

@@ -10,6 +10,7 @@ constant REP = 't/tmp/rep';
 constant DOC = 't/tmp/doc';
 
 plan 9;
+diag "Basic";
 
 rmtree 't/tmp';
 mktree DOC;

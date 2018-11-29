@@ -4,7 +4,8 @@ use Pod::To::Cached;
 use PodCache::Render;
 use PodCache::Processed;
 
-plan 21;
+plan 22;
+diag "format codes";
 my $fn = 'format-codes-test-pod-file_0';
 
 constant REP = 't/tmp/rep';
@@ -330,3 +331,20 @@ like $rv, /
     \s+ 'B&lt;say&gt;'
     \s+ 'C&lt;in&gt; between words.'
     /, 'V format';
+
+$pr = cache_test(++$fn, q:to/PODEND/);
+    =begin pod
+
+    Some thing F<a-filename.pod> between words.
+    =end pod
+    PODEND
+
+$rv = $pr.pod-body.subst(/\s+/,' ',:g).trim;
+#--MARKER-- Test 22
+like $rv, /
+    '<section name="pod">'
+    \s* '<p>'
+    \s* 'Some thing'
+    \s+ 'F&lt;a-filename.pod&gt;'
+    \s+ 'between words.'
+    /, 'Unknown format';

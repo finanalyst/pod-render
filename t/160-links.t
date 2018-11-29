@@ -12,6 +12,8 @@ constant DOC = 't/tmp/doc';
 constant OUTPUT = 't/tmp/html';
 constant CONFIG = 't/tmp/config';
 
+diag "links test - slow";
+
 my PodCache::Render $renderer .=new(:output(OUTPUT), :path(REP), :config( CONFIG ));
 
 my @responses = $renderer.links-test;

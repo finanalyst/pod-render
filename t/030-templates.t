@@ -14,6 +14,7 @@ constant TEMPL = 't/tmp/templates';
 
 rmtree TEMPL;
 mktree TEMPL ~ '/html';
+diag "templates";
 
 my $fn = 'templates-test-pod-file_0';
 

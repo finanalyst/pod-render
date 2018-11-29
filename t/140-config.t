@@ -9,6 +9,7 @@ use PodCache::Processed;
 # Assumes the presence in cache of files defined in 010-basic.t
 
 #plan 7;
+diag "config and html";
 
 constant REP = 't/tmp/rep';
 constant DOC = 't/tmp/doc';

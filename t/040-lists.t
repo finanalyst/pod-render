@@ -5,6 +5,8 @@ use PodCache::Render;
 use PodCache::Processed;
 
 plan 5;
+diag "lists";
+
 my $fn = 'lists-test-pod-file_0';
 
 constant REP = 't/tmp/rep';

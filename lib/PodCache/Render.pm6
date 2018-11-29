@@ -370,7 +370,7 @@ method create-collection(@names = %.pfiles.keys, :$clear = False ) {
             }
             else {
                 # no assets given, so copy pod.css
-                %?RESOURCES<assets/css/pod.css>.copy: "$!output/assets/pod.css"
+                %?RESOURCES<assets/pod.css>.copy: "$!output/assets/pod.css"
             }
         }
         $!output-test = True;
