@@ -1,6 +1,11 @@
+use v6.c;
 use Template::Mustache;
+
+constant TEMPLATES = 'resources/templates';
+constant RENDERING = 'html';
+
 unit class PodCache::Engine;
-has $!default;
+
 has %.tmpl = (
     #| templates defined here without explicit html
     #| markup specific templates defined in mustache files.
@@ -14,8 +19,9 @@ has $!tmpl-engine = Template::Mustache.new;
 has $!verbose;
 has $!debug; # debug for rendition method
 
-has Str $!templates;
-has Str $!rendering;
+has Str $.rendering;
+has Str $.t-dir;
+
 # list of the templates needed (not defined as short templates below)
 has @!template-list = <
     block-code body-wrap comment file-wrap footnotes
@@ -28,32 +34,30 @@ has @!template-list = <
     >;
 has @.over-ridden = ();
 
-submethod BUILD( :$!default, :$!templates, :$!rendering,  :$!verbose = False, :$!debug = False ) {}
+submethod BUILD( :$templates = Str, :$rendering = Str,  :$!verbose = False, :$!debug = False ) {
+    $!rendering = $rendering // RENDERING;
+    $!t-dir = ( $templates // TEMPLATES ) ~ "/$!rendering";
+    exit note "$!t-dir must be a directory" if ($templates or $rendering) and $!t-dir.IO ~~ :!d;
 
-method verify-templates {
-    die "$!templates/$!rendering must be a directory" unless "$!templates/$!rendering".IO ~~ :d;
+}
+
+method TWEAK {
     my @missing = ();
     for @!template-list -> $tm {
-        if "$!templates/$!rendering/$tm.mustache".IO ~~ :f {
-            %!tmpl{$tm} = "$!templates/$!rendering/$tm.mustache".IO.slurp;
+        if "$!t-dir/$tm.mustache".IO ~~ :f {
+            %!tmpl{$tm} = "$!t-dir/$tm.mustache".IO.slurp;
             @!over-ridden.push: "$tm"
         }
         else {
-            %!tmpl{$tm} = "$!default/$tm.mustache".IO.slurp;
+            %!tmpl{$tm} = (TEMPLATES ~ '/' ~ RENDERING ~ '/' ~ "/$tm.mustache").IO.slurp;
             @missing.push: "$tm"
         }
     }
-    note "The following templates do not exist under $!templates/$!rendering"
+    note "The following templates do not exist under $!t-dir"
         ~ @missing.join("\n\t")
-        ~ "\nThe default templates in ｢$!default｣ are used instead"
+        ~ "\nThe default templates in ｢" ~ TEMPLATES ~ '/' ~ RENDERING ~'｣ are used instead'
         if +@missing and $!verbose;
     note 'Templates verified' if $!verbose;
-}
-
-method tmpl-report( --> Str) {
-    [~] gather for @!template-list -> $tm {
-        take "｢$tm\.mustache｣ from " ~ ((($tm ~~ any @!over-ridden) ?? "$!templates/$!rendering" !! $!default) ~ "\n")
-    }
 }
 
 method rendition(Str $key, %params --> Str) {
@@ -68,4 +72,9 @@ method rendition(Str $key, %params --> Str) {
     }
     die "Cannot process non-existent template ｢$key｣" unless %!tmpl{$key}:exists;
     $!tmpl-engine.render( %!tmpl{$key}, %params, :literal );
+}
+
+method gen-templates {
+    die "｢$!t-dir｣ must be a writable directory for Templates." unless $!t-dir.IO ~~ :d;
+    for %!tmpl.kv -> $nm, $str { "$!t-dir/$nm.mustache".IO.spurt: $str }
 }

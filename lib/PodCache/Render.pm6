@@ -160,22 +160,19 @@ use LibCurl::Easy;
 no precompilation;
 unit class PodCache::Render is Pod::To::Cached;
 
-constant TEMPLATES = 'resources/templates';
-constant RENDERING = 'html';
 constant ASSETS = 'resources/assets';
 
 has PodCache::Engine $.engine;
 has Bool $!global-links; # whether links must be unique to collection (True), or to Pod file (Default False)
 has Bool $.verbose is rw;
 has Bool $.debug is rw;
-has $!templates;
+
+has $!config;
+has $!assets;
 has $!rendering;
 has $!output;
 has Bool $!output-test; # caches the result of the output directory test
 has Bool $.clear-output;
-
-has $!config;
-has $!assets;
 
 has %.pfiles;
 has @!names; # ordered array of hash of names in cache, with directory paths
@@ -183,27 +180,24 @@ has %.global-index;
 has @.global-links;
 
 submethod BUILD(
-    :$!templates = TEMPLATES,
-    :$!rendering = RENDERING,
-    :$!output = $!rendering,
-    :$!config = $!rendering,
+    :$templates = Str,
+    :$rendering = Str,
+    :$output = Str,
+    :$config = Str,
     :$!assets = ASSETS,
     :$!global-links = False,
     :$!verbose = False,
     :$!debug = False,
     :$!clear-output = False,
-    ) {}
-
-submethod TWEAK {
-    $!engine .= new(:default( TEMPLATES ~ '/' ~ RENDERING ), :$!templates, :$!rendering);
-    $!engine.verify-templates;
+    ) {
+        $!engine .= new(:$templates, :$rendering);
+        $!rendering = $!engine.rendering; # this sequence so that default rendering is set only in Engine.pm6
+        $!output = $output // $!rendering;
+        $!config = $config // $!output;
 }
 
 method gen-templates {
-    die "It does not seem that a new template and rendering directory have been given"
-        unless ( TEMPLATES ~ '/' ~ RENDERING ).IO ne "$!templates/$!rendering".IO;
-    die "｢$!templates/$!rendering｣ must be a writable directory for Templates." unless "$!templates/$!rendering".IO ~~ :d;
-    for $!engine.tmpl.kv -> $nm, $str { "$!templates/$!rendering/$nm.mustache".IO.spurt: $str }
+    $!engine.gen-templates
 }
 
 method gen-index-files {
@@ -313,7 +307,7 @@ method process-cache {
 }
 
 method templates-changed {
-    $!engine.over-ridden, "from $!templates/$!rendering"
+    $!engine.over-ridden, 'from ' ~ $!engine.t-dir;
 }
 
 method links-test {
