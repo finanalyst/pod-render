@@ -1,7 +1,6 @@
 use lib 'lib';
 use Test;
 use File::Directory::Tree;
-use Pod::To::Cached;
 use PodCache::Render;
 use PodCache::Processed;
 plan 4;
@@ -17,8 +16,6 @@ mktree TEMPL ~ '/html';
 diag "templates";
 
 my $fn = 'templates-test-pod-file_0';
-
-my Pod::To::Cached $cache .= new(:path(REP)); # dies if no cache
 
 (TEMPL ~ "/html/para.mustache").IO.spurt: '<p class="special {{# addClass }} {{ addClass }}{{/ addClass }}">{{{ contents }}}</p>';
 

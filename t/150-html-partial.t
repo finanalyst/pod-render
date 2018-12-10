@@ -6,6 +6,7 @@ use File::Directory::Tree;
 use PodCache::Render;
 use PodCache::Processed;
 
+plan 11;
 # Assumes the presence in cache of files defined in 140-basic.t
 
 constant REP = 't/tmp/rep';
@@ -46,7 +47,6 @@ like $rv, /
     .+ '</body>'
     .* '</html>'
     / , 'html seems ok';
-
 $renderer.gen-index-files;
 #--MARKER-- Test 7
 lives-ok {$renderer.write-indices }, 'index files to html';
@@ -69,7 +69,7 @@ my $mod-time = ( OUTPUT ~ '/a-second-pod-file.html').IO.modified;
     =head2 This is a heading
 
     Some text after a heading
-    
+
     This file has been altered
 
     =end pod
@@ -77,8 +77,6 @@ my $mod-time = ( OUTPUT ~ '/a-second-pod-file.html').IO.modified;
 # re-instantiating detects new and tainted files
 $renderer .= new(:path(REP), :output( OUTPUT ), :config( CONFIG ) );
 # renews the collection
-$renderer.update-collection; 
+$renderer.update-collection;
 #--MARKER-- Test 11
 ok $mod-time < ( OUTPUT ~ '/a-second-pod-file.html').IO.modified, 'tainted source has led to new html file';
-
-done-testing

@@ -1,16 +1,15 @@
 use lib 'lib';
 use Test;
-use Pod::To::Cached;
 use PodCache::Render;
 use PodCache::Processed;
 
 plan 1;
 my $fn = 'preserve-html-test-pod-file_0';
+diag 'html';
 
 constant REP = 't/tmp/rep';
 constant DOC = 't/tmp/doc';
 
-my Pod::To::Cached $cache .= new(:path(REP)); # dies if no cache
 my PodCache::Processed $pr;
 my Str $rv;
 

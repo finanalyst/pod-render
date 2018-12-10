@@ -1,6 +1,5 @@
 use lib 'lib';
 use Test;
-use Pod::To::Cached;
 use PodCache::Render;
 use PodCache::Processed;
 
@@ -12,7 +11,6 @@ my $fn = 'code-test-pod-file_0';
 constant REP = 't/tmp/rep';
 constant DOC = 't/tmp/doc';
 
-my Pod::To::Cached $cache .= new(:path(REP)); # dies if no cache
 my PodCache::Processed $pr;
 
 sub cache_test(Str $fn is copy, Str $to-cache --> PodCache::Processed ) {
@@ -59,8 +57,8 @@ like $pr.pod-body.subst(/\s+/,' ',:g).trim, /
     '<p>' \s* 'This is an ordinary paragraph' \s* '</p>'
     \s* '<pre class="pod-block-code">While this is not'
     \s* 'This is a code block</pre>'
-    \s* '<h1 id="#t_1">'
-    \s* '<a' \s* [ 'class="u"' \s* | 'href="#__top"' \s* ]**2 '>'
+    \s* '<h1 id="t_1">'
+    \s* '<a' \s* [ 'class="u"' \s* | 'href="#___top"' \s* | 'title="go to top of document"' \s* ]**3 '>'
     \s* 'Mumble: &quot;mumble&quot;'
     \s* '</a>'
     \s* '</h1>'

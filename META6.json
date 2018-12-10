@@ -17,7 +17,8 @@
         "File::Directory::Tree",
         "JSON::Fast",
         "Pod::To::Cached",
-        "LibCurl::Easy"
+        "LibCurl::Easy",
+        "URI"
     ],
     "resources": [
         "assets/pod.css"
@@ -26,7 +27,8 @@
         "Test",
         "Test::Output",
         "Pod::To::Cached",
-        "File::Directory::Tree"
+        "File::Directory::Tree",
+        "YAMLish"
     ],
     "source-type" : "git",
     "source-url" : "git://github.com/finanalyst/pod-render.git"

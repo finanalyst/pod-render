@@ -1,6 +1,5 @@
 use lib 'lib';
 use Test;
-use Pod::To::Cached;
 use PodCache::Render;
 use PodCache::Processed;
 
@@ -10,7 +9,6 @@ my $fn = 'meta-data-test-pod-file_0';
 constant REP = 't/tmp/rep';
 constant DOC = 't/tmp/doc';
 
-my Pod::To::Cached $cache .= new(:path(REP)); # dies if no cache
 my PodCache::Processed $pr;
 my Str $rv;
 

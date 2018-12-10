@@ -64,62 +64,19 @@ sub tmpl-data {
     %(
     :escaped<{{ contents }}>,
     :raw<{{{ contents }}}>,
-    :format-c-index('C<{{ contents }}>'),
+    :format-c-index('C<{{{ contents }}}>'),
     :zero(' '),
-    'table' => '<table class="pod-table{{# addClass }} {{ addClass }}{{/ addClass }}">
-        {{# caption }}<caption>{{{ caption }}}</caption>{{/ caption }}
-        {{# headers }}<thead>
-            <tr>{{# cells }}<th>{{{ . }}}</th>{{/ cells }}</tr>
-        </thead>{{/ headers }}
-        <tbody>
-            {{# rows }}<tr>{{# cells }}<td>{{{ . }}}</td>{{/ cells }}</tr>{{/ rows }}
-        </tbody>
-    </table>
+
+    'block-code' => '<pre class="pod-block-code{{# addClass }} {{ addClass }}{{/ addClass}}">{{# contents }}{{{ contents }}}{{/ contents }}</pre>
     ',
 
-    'indexation-heading' => '<h{{ level }} class="indexation-heading">{{ text }}</h{{ level }}>
-    {{# subtitle }}<p>{{ subtitle }}</p>{{/ subtitle }}
+    'body-wrap' => '<!-- Start of ｢{{ name }}｣ -->
+    {{{ body }}}
     ',
 
-    'format-u' => '<u{{# addClass }} class="{{ addClass }}"{{/ addClass }}>{{{ contents }}}</u>
-    ',
+    'comment' => '<!-- {{{ contents }}} -->',
 
-    'format-b' => '<strong{{# addClass }} class="{{ addClass }}"{{/ addClass }}>{{{ contents }}}</strong>
-    ',
-
-    'comment' => '<!-- {{{ contents }}} -->
-    ',
-
-    'section' => '<section name="{{ name }}">{{{ contents }}}</section>
-    ',
-
-    'global-indexation-file' => '<!doctype html>
-    <html lang="en">
-        <head>
-            <title>{{ title }}</title>
-            <meta charset="UTF-8" />
-            <link rel="stylesheet" type="text/css" href="assets/pod.css" media="screen" title="default" />
-        </head>
-        <body class="pod">
-            <div class="pod-body{{^ toc }} no-toc{{/ toc }}">
-                {{{ body }}}
-            </div>
-            {{# path }}<footer>Rendered from {{ path }}</footer>{{/ path }}
-        </body>
-    </html>
-    ',
-
-    'global-indexation-defn-list' => '<dl class="global-indexation">
-        {{# list }}
-            <dt>{{ text }}</dt> {{# refs }}<dd><a href="{{{ target }}}">{{{ place }}}</a></dd>{{/ refs }}
-        {{/ list }}
-    </dl>
-    ',
-
-    'format-k' => '<kbd{{# addClass }}class="{{ addClass }}"{{/ addClass }}>{{{ contents }}}</kbd>
-    ',
-
-    'format-i' => '<em{{# addClass }} class="{{ addClass }}"{{/ addClass }}>{{{ contents }}}</em>
+    'defn' => '<dl><dt>{{ term }}</dt><dd>{{{ contents }}}</dd></dl>
     ',
 
     'file-wrap' => '<!doctype html>
@@ -142,51 +99,86 @@ sub tmpl-data {
     </html>
     ',
 
-    'toc' => '<nav class="indexgroup">
-        <table id="TOC">
-            <caption><h2 id="TOC_Title">Table of Contents</h2></caption>
-            {{# toc }}
-            <tr class="toc-level-{{ level }}">
-                <td class="toc-text"><a href="{{ target }}">{{{ text }}}</a></td>
-            </tr>
-            {{/ toc }}
-        </table>
-    </nav>
+    'footnotes' => '<div class="footnotes">
+        <ol>{{# notes }}
+                <li id="{{ fnTarget }}">{{{ text }}}<a class="footnote" href="#{{ retTarget }}">Back</a></li>
+                {{/ notes }}
+        </ol>
+    </div>
     ',
 
-    'title' => '<h1 class="title{{# addClass }} {{ addClass }}{{/ addClass }}" id="{{ target }}">{{{ text }}}</h1>
-    ',
+    'format-b' => '<strong{{# addClass }} class="{{ addClass }}"{{/ addClass }}>{{{ contents }}}</strong>',
 
     'format-c' => '<code{{# addClass }} class="{{ addClass }}"{{/ addClass }}>{{{ contents }}}</code>
     ',
 
-    'block-code' => '<pre class="pod-block-code{{# addClass }} {{ addClass }}{{/ addClass}}">{{# contents }}{{{ contents }}}{{/ contents }}</pre>
+    'format-i' => '<em{{# addClass }} class="{{ addClass }}"{{/ addClass }}>{{{ contents }}}</em>',
+
+    'format-k' => '<kbd{{# addClass }}class="{{ addClass }}"{{/ addClass }}>{{{ contents }}}</kbd>
     ',
 
-    'subtitle' => '<p class="subtitle{{# addClass }} {{ addClass }}{{/ addClass }}">{{{ contents }}}</p>
+    'format-l' => '<a href="{{ target }}"{{# addClass }} class="{{ addClass }}"{{/ addClass}}>{{{ contents }}}</a>
     ',
 
-    'meta' => '{{# meta }}
-    <meta name="{{ name }}" value="{{ value }}" />
-    {{/ meta }}
+    'format-n' => '<sup><a name="{{ retTarget }}" href="#{{ fnTarget }}">[{{ fnNumber }}]</a></sup>
     ',
 
-    'index' => '<div id="index">
-        <dl class="index">
-            {{# index }}
-                <dt>{{ text }}</dt> {{# refs }}<dd><a href="{{ target }}">{{{ place }}}</a></dd>{{/ refs }}
-            {{/ index }}
-        </dl>
-    </div>
+    'format-r' => '<var{{# addClass }} class="{{ addClass }}"{{/ addClass }}>{{{ contents }}}</var>',
+
+    'format-t' => '<samp{{# addClass }} class="{{ addClass }}"{{/ addClass }}>{{{ contents }}}</samp>',
+
+    'format-u' => '<u{{# addClass }} class="{{ addClass }}"{{/ addClass }}>{{{ contents }}}</u>',
+
+    'format-x' => '{{^ header }}<a name="{{ target }}"></a>{{/ header }}{{# text }}<span class="index-entry{{# addClass }} {{ addClass }}{{/ addClass }}">{{{ text }}}</span>{{/ text }} ',
+
+    'global-indexation-defn-list' => '<dl class="global-indexation">
+        {{# list }}
+            <dt>{{ text }}</dt> {{# refs }}<dd><a href="{{ source }}#{{ target }}">{{{ place }}}</a></dd>{{/ refs }}
+        {{/ list }}
+    </dl>
+    ',
+
+    'global-indexation-file' => '<!doctype html>
+    <html lang="en">
+        <head>
+            <title>{{ title }}</title>
+            <meta charset="UTF-8" />
+            <link rel="stylesheet" type="text/css" href="assets/pod.css" media="screen" title="default" />
+        </head>
+        <body class="pod">
+            <div class="pod-body{{^ toc }} no-toc{{/ toc }}">
+                {{{ body }}}
+            </div>
+            {{# path }}<footer>Rendered from {{ path }}</footer>{{/ path }}
+        </body>
+    </html>
     ',
 
     'global-indexation-heading' => '<h{{ level }} class="global-indexation-heading">{{ text }}</h{{ level }}>
     ',
 
-    'format-t' => '<samp{{# addClass }} class="{{ addClass }}"{{/ addClass }}>{{{ contents }}}</samp>
+    'heading' => '<h{{# level }}{{ level }}{{/ level }} id="{{ target }}"><a href="#{{ top }}" class="u" title="go to top of document">{{{ text }}}</a></h{{# level }}{{ level }}{{/ level }}>
     ',
 
-    'format-n' => '<sup><a name="{{ retTarget }}" href="{{ fnTarget }}">[{{ fnNumber }}]</a></sup>
+    'index' => '<div id="index"><h2 class="source-index">Index</h2>
+        <dl class="index">
+            {{# index }}
+                <dt>{{{ text }}}</dt> {{# refs }}<dd><a href="#{{ target }}">{{{ place }}}</a></dd>{{/ refs }}
+            {{/ index }}
+        </dl>
+    </div>
+    ',
+
+    'indexation-entry' => '<div class="indexation-entry">
+        <a href="{{ link }}">{{ title }}</a>
+        {{# subtitle }}{{ subtitle }}{{/ subtitle }}
+        {{# toc }}<table class="indexation-entry-toc">
+            <tr class="entry-toc-level-{{ level }}">
+                <td class="entry-toc-text"><a href="{{ link }}#{{ target }}">{{{ text }}}</a></td>
+            </tr>
+        </table>
+        {{/ toc }}
+    </div>
     ',
 
     'indexation-file' => '<!doctype html>
@@ -205,55 +197,57 @@ sub tmpl-data {
     </html>
     ',
 
-    'indexation-entry' => '<div class="indexation-entry">
-        <a href="{{ link }}">{{ title }}</a>
-        {{# subtitle }}{{ subtitle }}{{/ subtitle }}
-        {{# toc }}<table class="indexation-entry-toc">
-            <tr class="entry-toc-level-{{ level }}">
-                <td class="entry-toc-text"><a href="{{ link }}{{ target }}">{{{ text }}}</a></td>
-            </tr>
-        </table>
-        {{/ toc }}
-    </div>
-    ',
-
-    'format-r' => '<var{{# addClass }} class="{{ addClass }}"{{/ addClass }}>{{{ contents }}}</var>
-    ',
-
-    'footnotes' => '<div class="footnotes">
-        <ol>{{# notes }}
-                <li id="{{ fnTarget }}">{{{ text }}}<a class="footnote" href="{{ retTarget }}">Back</a></li>
-                {{/ notes }}
-        </ol>
-    </div>
-    ',
-
-    'para' => '<p{{# addClass }} class="{{ addClass }}"{{/ addClass }}>{{{ contents }}}</p>
-    ',
-
-    'output' => '<pre class="pod-output">{{{ contents }}}</pre>
-    ',
-
-    'notimplemented' => '<span class="pod-block-notimplemented">{{{ contents }}}</span>
+    'indexation-heading' => '<h{{ level }} class="indexation-heading">{{ text }}</h{{ level }}>
+    {{# subtitle }}<p>{{ subtitle }}</p>{{/ subtitle }}
     ',
 
     'item' => '<li{{# addClass }} class="{{ addClass }}"{{/ addClass }}>{{{ contents }}}</li>
     ',
 
-    'body-wrap' => '<!-- Start of ｢{{ name }}｣ -->
-    {{{ body }}}
+    'list' => '<ul>
+        {{# items }}{{{ . }}}{{/ items}}
+    </ul>
     ',
 
-    'list' => '<ul>{{# items }}{{{ . }}}{{/ items}}</ul>
+    'meta' => '{{# meta }}
+    <meta name="{{ name }}" value="{{ value }}" />
+    {{/ meta }}
     ',
 
-    'heading' => '<h{{# level }}{{ level }}{{/ level }} id="{{ target }}"><a href="{{ top }}" class="u">{{{ text }}}</a></h{{# level }}{{ level }}{{/ level }}>
+    'notimplemented' => '<span class="pod-block-notimplemented">{{{ contents }}}</span>',
+
+    'output' => '<pre class="pod-output">{{{ contents }}}</pre>',
+
+    'para' => '<p{{# addClass }} class="{{ addClass }}"{{/ addClass }}>{{{ contents }}}</p>',
+
+    'section' => '<section name="{{ name }}">{{{ contents }}}
+    </section>',
+
+    'subtitle' => '<p class="subtitle{{# addClass }} {{ addClass }}{{/ addClass }}">{{{ contents }}}</p>',
+
+    'table' => '<table class="pod-table{{# addClass }} {{ addClass }}{{/ addClass }}">
+        {{# caption }}<caption>{{{ caption }}}</caption>{{/ caption }}
+        {{# headers }}<thead>
+            <tr>{{# cells }}<th>{{{ . }}}</th>{{/ cells }}</tr>
+        </thead>{{/ headers }}
+        <tbody>
+            {{# rows }}<tr>{{# cells }}<td>{{{ . }}}</td>{{/ cells }}</tr>{{/ rows }}
+        </tbody>
+    </table>
     ',
 
-    'format-x' => '<span id="{{ target }}" class="indexed{{# header }}-header{{/ header }}{{# addClass }} {{ addClass }}{{/ addClass }}">{{{ text }}}</span>
-    ',
+    'title' => '<h1 class="title{{# addClass }} {{ addClass }}{{/ addClass }}" id="{{ target }}">{{{ text }}}</h1>',
 
-    'format-l' => '<a href="{{ target }}"{{# addClass }} class="{{ addClass }}"{{/ addClass}}>{{{ contents }}}</a>
-    '
+    'toc' => '<nav class="indexgroup">
+        <table id="TOC">
+            <caption><h2 id="TOC_Title">Table of Contents</h2></caption>
+            {{# toc }}
+            <tr class="toc-level-{{ level }}">
+                <td class="toc-text"><a href="#{{ target }}">{{{ text }}}</a></td>
+            </tr>
+            {{/ toc }}
+        </table>
+    </nav>
+    ',
     )
 }

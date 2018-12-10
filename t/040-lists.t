@@ -1,18 +1,16 @@
 use lib 'lib';
 use Test;
-use Pod::To::Cached;
 use PodCache::Render;
 use PodCache::Processed;
 
-plan 5;
-diag "lists";
+plan 6;
+diag "lists, placement";
 
 my $fn = 'lists-test-pod-file_0';
 
 constant REP = 't/tmp/rep';
 constant DOC = 't/tmp/doc';
 
-my Pod::To::Cached $cache .= new(:path(REP)); # dies if no cache
 my PodCache::Processed $pr;
 
 sub cache_test(Str $fn is copy, Str $to-cache --> PodCache::Processed ) {
@@ -138,12 +136,12 @@ like $pr.pod-body.subst(/\s+/,' ',:g).trim,
     \s*     '<li>' \s* '<p>Beer</p>' \s* '</li>'
     \s*    '<ul>'
     \s*         '<ul>'
-    \s*             '<li>' \s* '<p>non-alcoholic</p>' \s* ' </li>'
+    \s*             '<li>' \s* '<p>non-alcoholic</p>' \s* '</li>'
     \s*         '</ul>'
     \s*     '</ul>'
     \s* '</ul>'
     \s* '</ul>'
-    /, 'hierarchical unordered list';
+    /, 'hierarchical unordered list, empty level';
 
 $pr = cache_test(++$fn, q:to/PODEND/);
     =begin pod
@@ -184,3 +182,38 @@ like $pr.pod-body.subst(/\s+/,' ',:g).trim,
     \s* '</ul>'
     \s* '<p>As you can see, folk wisdom is often of dubious value.</p>'
     /, 'List with embedded paragraphs';
+
+# Placements
+# These examples are adapted from pod.pod6 :)
+
+'t/tmp/disclaimernotice'.IO.spurt: q:to/COPYEND/;
+    ABSOLUTELY NO WARRANTY IS IMPLIED. NOT EVEN OF ANY KIND. WE HAVE SOLD
+    YOU THIS SOFTWARE WITH NO HINT OF A SUGGESTION THAT IT IS EITHER USEFUL
+    OR USABLE. AS FOR GUARANTEES OF CORRECTNESS...DON'T MAKE US LAUGH! AT
+    SOME TIME IN THE FUTURE WE MIGHT DEIGN TO SELL YOU UPGRADES THAT PURPORT
+    TO ADDRESS SOME OF THE APPLICATION'S MANY DEFICIENCIES, BUT NO PROMISES
+    THERE EITHER. WE HAVE MORE LAWYERS ON STAFF THAN YOU HAVE TOTAL
+    EMPLOYEES, SO DON'T EVEN *THINK* ABOUT SUING US. HAVE A NICE DAY.
+    COPYEND
+
+$pr = cache_test(++$fn, q:to/PODEND/);
+    =begin pod
+
+    =COPYRIGHT
+    P<https://github.com/rakudo/rakudo/blob/master/LICENSE>
+
+    =DISCLAIMER
+    P<file:t/tmp/disclaimernotice>
+
+    =end pod
+    PODEND
+
+#--MARKER-- Test 6
+like $pr.pod-body.subst(/\s+/,' ',:g).trim,
+        /
+            'The Artistic License 2.0'
+            .+
+            'ABSOLUTELY NO WARRANTY IS IMPLIED'
+        /, 'Seems to have got both docs';
+
+#done-testing

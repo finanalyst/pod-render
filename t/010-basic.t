@@ -65,15 +65,15 @@ output-like { $renderer.processed-instance(:name<a-pod-file> ) }, / 'pod-tree is
 $renderer.debug = False;
 #--MARKER-- Test 7
 like $pf.pod-body.subst(/\s+/,' ', :g).trim,
-    /'<section name="pod">' \s* '<h1 class="title" id="#__top">This is a title</h1>' \s* '<p>Some text</p>' \s* '</section>'/,
+    /'<section name="pod">' \s* '<h1 class="title" id="___top">This is a title</h1>' \s* '<p>Some text</p>' \s* '</section>'/,
     'simple pod rendered';
 
 $pf = $renderer.processed-instance(:name<a-second-pod-file>);
 #--MARKER-- Test 8
 like $pf.pod-body, /
-    '<h1 class="title" id="#__top">More and more</h1>'
+    '<h1 class="title" id="___top">More and more</h1>'
     \s* '<p>Some more text</p>'
-    \s* '<h2 id="#t_0_1"><a href="#__top" class="u">This is a heading</a></h2>'
+    \s* '<h2 id="t_0_1"><a href="#___top" class="u" title="go to top of document">This is a heading</a></h2>'
     \s* '<p>Some text after a heading</p>'
     /, 'title rendered';
 #--MARKER-- Test 9

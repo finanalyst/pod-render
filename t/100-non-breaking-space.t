@@ -1,7 +1,6 @@
 use lib 'lib';
 use Test;
 use File::Directory::Tree;
-use Pod::To::Cached;
 use PodCache::Render;
 use PodCache::Processed;
 
@@ -11,7 +10,6 @@ constant REP = 't/tmp/rep';
 constant DOC = 't/tmp/doc';
 my $fn = 'non-breaking-space-test-pod-file_0';
 
-my Pod::To::Cached $cache .= new(:path(REP)); # dies if no cache
 my PodCache::Processed $pr;
 
 sub cache_test(Str $fn is copy, Str $to-cache --> PodCache::Processed ) {

@@ -2,13 +2,13 @@ use lib 'lib';
 use Test;
 use Test::Output;
 use File::Directory::Tree;
-use Pod::To::Cached;
 use PodCache::Render;
 use PodCache::Processed;
+use YAMLish;
 
-# Assumes the presence in cache of files defined in 010-basic.t
+# Assumes the presence in cache of (at least) files defined in 010-basic.t
 
-#plan 7;
+plan 22;
 diag "config and html";
 
 constant REP = 't/tmp/rep';
@@ -44,7 +44,7 @@ my %test;
 #--MARKER-- Test 2
 lives-ok { %test = $renderer.test-index-files(:quiet) }, 'test non-existent index files';
 #--MARKER-- Test 3
-is-deeply %test<errors>, ('No index.yaml files, so will generate default files' , ), 'without files generated error';
+is-deeply %test<errors>, ('No *.yaml files' , ), 'without files generated error';
 
 #--MARKER-- Test 4
 lives-ok {  $renderer.gen-index-files }, 'gen-index-files lives';
@@ -67,9 +67,13 @@ is +%test<not-in-cache>, 0, 'round-trip: no non-cache';
 is +%test<not-in-index>, 0, 'round-trip: index covers all cache';
 #--MARKER-- Test 11
 is +%test<index-and-cache>, +$renderer.files.keys, 'round-trip: all files in index';
+#--MARKER-- Test 12
+nok (CONFIG ~ '/missing-sources.yaml').IO ~~ :f, 'A missing sources index is not created';
+
+my $files-in-cache = %test<index-and-cache>;
 
 (CONFIG ~ '/index.yaml').IO.spurt(q:to/ENDYAML/); # pseudo index
-    # from template
+    # from test
     ---
     title: test
     content:
@@ -81,17 +85,17 @@ is +%test<index-and-cache>, +$renderer.files.keys, 'round-trip: all files in ind
                 filename: a-second-pod-file
         -
             item:
-                filename: code-test-pod-file_1
+                filename: sub-dir-3/a-file-2
         -
             item:
-                filename: code-test-pod-file_2
+                filename: sub-dir-3/a-file-3
         -
             item:
-                filename: comment-test-pod-file_1
+                filename: sub-dir-3/a-file-4
+        # distorted
         -
             item:
-                filename: format-codes-test-pod-file_1
-        # template but distorted
+                filename: sub-dir-3/a-file-1xx
         -
             item:
                 filename: sub-dir-3/a-file-2xx
@@ -104,21 +108,30 @@ is +%test<index-and-cache>, +$renderer.files.keys, 'round-trip: all files in ind
         # duplicated
         -
             item:
-                filename: code-test-pod-file_2
+                filename: sub-dir-3/a-file-2
         -
             item:
-                filename: comment-test-pod-file_1
+                filename: sub-dir-3/a-file-3
+        -
+            item:
+                filename: sub-dir-3/a-file-4
     ENDYAML
 
 %test = $renderer.test-index-files(:quiet);
-#--MARKER-- Test 12
-is +%test<duplicates-in-index>, 2, 'pseudo index expected duplicates';
 #--MARKER-- Test 13
-is +%test<not-in-cache>, 3, 'pseudo index expected non-cache';
+is +%test<duplicates-in-index>, 3, 'pseudo index expected duplicates';
 #--MARKER-- Test 14
-is +%test<not-in-index>, +$renderer.files.keys - 6 , 'pseudo index expected index not covering cache';
+is +%test<not-in-cache>, 4, 'pseudo index expected non-cache';
 #--MARKER-- Test 15
-is +%test<index-and-cache>, 6, 'pseudo index expected in index and cache';
+is +%test<not-in-index>, $files-in-cache - 5 , 'pseudo index expected index not covering cache';
+#--MARKER-- Test 16
+is +%test<index-and-cache>, 5, 'pseudo index expected in index and cache';
+
+#--MARKER-- Test 17
+ok (CONFIG ~ '/missing-sources.yaml').IO ~~ :f, 'A missing sources index is created';
+my %missing = load-yaml((CONFIG ~ '/missing-sources.yaml').IO.slurp);
+#--MARKER-- Test 18
+is +%missing<content>, $files-in-cache - 5, 'all missing sources names are in missing yaml';
 
 (CONFIG ~ '/index2.yaml').IO.spurt(q:to/ENDYAML/); # pseudo index 2
     ---
@@ -126,28 +139,25 @@ is +%test<index-and-cache>, 6, 'pseudo index expected in index and cache';
     content:
         -
             item:
-                filename: format-codes-test-pod-file_2
+                filename: sub-dir-1/a-file-2
         -
             item:
-                filename: format-codes-test-pod-file_3
+                filename: sub-dir-1/a-file-3
         -
             item:
-                filename: format-codes-test-pod-file_4
-        -
-            item:
-                filename: format-codes-test-pod-file_5
+                filename: sub-dir-1/a-file-4
     ENDYAML
 
 %test = $renderer.test-index-files(:quiet);
-#--MARKER-- Test 16
-is +%test<duplicates-in-index>, 2, 'multiple psuedo index expected duplicates';
-#--MARKER-- Test 17
-is +%test<not-in-cache>, 3, 'multiple psuedo index expected non-cache';
-#--MARKER-- Test 18
-is +%test<not-in-index>, +$renderer.files.keys - 10 , 'multiple psuedo index expected index not covering cache';
 #--MARKER-- Test 19
-is +%test<index-and-cache>, 10, 'multiple psuedo index expected in index and cache';
+is +%test<duplicates-in-index>, 3, 'multiple psuedo index expected duplicates';
+#--MARKER-- Test 20
+is +%test<not-in-cache>, 4, 'multiple psuedo index expected non-cache';
+#--MARKER-- Test 21
+is +%test<not-in-index>, $files-in-cache - 8  , 'multiple psuedo index expected index not covering cache';
+#--MARKER-- Test 22
+is +%test<index-and-cache>, 8, 'multiple psuedo index expected in index and cache';
 
 # TODO some tests for global-index.
 
-done-testing;
+#done-testing;

@@ -1,16 +1,15 @@
 use lib 'lib';
 use Test;
-use Pod::To::Cached;
 use PodCache::Render;
 use PodCache::Processed;
 
 plan 2;
 my $fn = 'headings-test-pod-file_0';
+diag 'Headings';
 
 constant REP = 't/tmp/rep';
 constant DOC = 't/tmp/doc';
 
-my Pod::To::Cached $cache .= new(:path(REP)); # dies if no cache
 my PodCache::Processed $pr;
 
 sub cache_test(Str $fn is copy, Str $to-cache --> PodCache::Processed ) {
@@ -50,6 +49,6 @@ my $html = $pr.pod-body.subst(/\s+/,' ',:g).trim;
 
 #put $html;
 #--MARKER-- Test 1
-like $html, /'h2 id="#t_2_2"' .+ '"u">Heading 2.2'/, 'Heading 2.2 has expected id';
+like $html, /'h2 id="t_2_2"' .+ '>Heading 2.2'/, 'Heading 2.2 has expected id';
 #--MARKER-- Test 2
-like $html, /'class="indexed-header">Heading' .+ '2.2.2</a>' / , 'Heading 2.2.2 is indexed';
+like $html, /'class="index-entry">Heading' .+ '2.2.2</a>' / , 'Heading 2.2.2 is indexed';

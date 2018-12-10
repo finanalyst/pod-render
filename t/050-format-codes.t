@@ -1,17 +1,15 @@
 use lib 'lib';
 use Test;
-use Pod::To::Cached;
 use PodCache::Render;
 use PodCache::Processed;
 
-plan 22;
+plan 21;
 diag "format codes";
 my $fn = 'format-codes-test-pod-file_0';
 
 constant REP = 't/tmp/rep';
 constant DOC = 't/tmp/doc';
 
-my Pod::To::Cached $cache .= new(:path(REP)); # dies if no cache
 my PodCache::Processed $pr;
 my Str $rv;
 
@@ -51,7 +49,7 @@ like $rv, /
     '<section name="pod">'
     \s* '<p>'
     \s* 'Some thing to say'
-    \s+ '<sup><a name="#fnret' .+ '" href="#fn' .+ '">[' \d+ ']</a></sup>'
+    \s+ '<sup><a name="fnret' .+ '" href="#fn' .+ '">[' \d+ ']</a></sup>'
     \s+ 'in between'
     .+ 'footnote<sup>'
     /, 'footnote references in text with and without spaces';
@@ -61,49 +59,12 @@ $rv = $pr.render-footnotes.subst(/\s+/,' ',:g).trim;
 like $rv, /
     \s* '<div class="footnotes">'
     \s* '<ol>'
-    \s* '<li id="#fn' .+ '">A footnote<a class="footnote" href="#fnret' .+ '">Back</a></li>'
+    \s* '<li id="fn' .+ '">A footnote<a class="footnote" href="#fnret' .+ '">Back</a></li>'
     \s* '<li' .+ '>next to a word<a'
     .+
     '</ol>'
     \s* '</div>'
     /, 'footnotes rendered later';
-
-$pr = cache_test(++$fn, q:to/PODEND/);
-    =begin pod
-
-    When indexing X<an item> the X<X format> is used.
-
-    It is possible to index X<an item> in repeated places.
-    =end pod
-    PODEND
-
-$rv = $pr.pod-body.subst(/\s+/,' ',:g).trim;
-#--MARKER-- Test 5
-like $rv, /
-    '<section name="pod">'
-    \s* '<p>'
-    \s* 'When indexing '
-    \s* '<span id="#t' .+ '" class="indexed">an item</span>'
-    \s* 'the'
-    \s* '<span id="#t' .+ '" class="indexed">X format</span> is used.'
-    .+ 'to index'
-    \s* '<span id="#t' .+ '" class="indexed">an item</span>'
-    \s* 'in repeated places.'
-    /, 'X format in text';
-
-$rv = $pr.render-index.subst(/\s+/,' ',:g).trim;
-#--MARKER-- Test 6
-like $rv, /
-    '<div id="index">'
-    \s* '<dl class="index">'
-    \s*     '<dt>X format</dt>'
-    \s*         '<dd><a href="#t' .+ '">' .+ '</a></dd>'
-    \s*     '<dt>an item</dt>'
-    \s*         '<dd><a href="#t' .+ '">' .+ '</a></dd>'
-    \s*         '<dd><a href="#t' .+ '">' .+ '</a></dd>'
-    \s* '</dl>'
-    \s* '</div>'
-    /, 'index rendered later';
 
 $pr = cache_test(++$fn, q:to/PODEND/);
     =begin pod
@@ -116,7 +77,7 @@ $pr = cache_test(++$fn, q:to/PODEND/);
     PODEND
 
 $rv = $pr.pod-body.subst(/\s+/,' ',:g).trim;
-#--MARKER-- Test 7
+#--MARKER-- Test 5
 like $rv, /
     '<section name="pod">'
     \s* '<p>'
@@ -124,7 +85,7 @@ like $rv, /
     \s+ '<strong>say</strong>'
     \s+ 'in between words.'
     /, 'bold when separated with a space';
-#--MARKER-- Test 8
+#--MARKER-- Test 6
 like $rv, /
     'I want to add a format<strong>next to a word</strong>' \s* 'in the middle.'
     /, 'bold without spaces';
@@ -140,7 +101,7 @@ $pr = cache_test(++$fn, q:to/PODEND/);
     PODEND
 
 $rv = $pr.pod-body.subst(/\s+/,' ',:g).trim;
-#--MARKER-- Test 9
+#--MARKER-- Test 7
 like $rv, /
     '<section name="pod">'
     \s* '<p>'
@@ -148,7 +109,7 @@ like $rv, /
     \s+ '<em>say</em>'
     \s+ 'in between words.'
     /, 'Important when separated with a space';
-#--MARKER-- Test 10
+#--MARKER-- Test 8
 like $rv, /
     'I want to add a format<em>next to a word</em>' \s* 'in the middle.'
     /, 'Important without spaces';
@@ -164,7 +125,7 @@ $pr = cache_test(++$fn, q:to/PODEND/);
     PODEND
 
 $rv = $pr.pod-body.subst(/\s+/,' ',:g).trim;
-#--MARKER-- Test 11
+#--MARKER-- Test 9
 like $rv, /
     '<section name="pod">'
     \s* '<p>'
@@ -172,7 +133,7 @@ like $rv, /
     \s+ '<u>say</u>'
     \s+ 'in between words.'
     /, 'Unusual when separated with a space';
-#--MARKER-- Test 12
+#--MARKER-- Test 10
 like $rv, /
     'I want to add a format<u>next to a word</u>'
     \s* 'in the middle.'
@@ -187,7 +148,7 @@ $pr = cache_test(++$fn, q:to/PODEND/);
     PODEND
 
 $rv = $pr.pod-body.subst(/\s+/,' ',:g).trim;
-#--MARKER-- Test 13
+#--MARKER-- Test 11
 like $rv, /
     '<section name="pod">'
     \s* '<p>'
@@ -203,7 +164,7 @@ $pr = cache_test(++$fn, q:to/PODEND/);
     =end pod
     PODEND
 $rv = $pr.pod-body.subst(/\s+/,' ',:g).trim;
-#--MARKER-- Test 14
+#--MARKER-- Test 12
 like $rv, /
     '<section name="pod">'
     \s* '<p>'
@@ -220,7 +181,7 @@ $pr = cache_test(++$fn, q:to/PODEND/);
     PODEND
 
 $rv = $pr.pod-body.subst(/\s+/,' ',:g).trim;
-#--MARKER-- Test 15
+#--MARKER-- Test 13
 like $rv, /
     '<section name="pod">'
     \s* '<p>'
@@ -237,7 +198,7 @@ $pr = cache_test(++$fn, q:to/PODEND/);
     PODEND
 
 $rv = $pr.pod-body.subst(/\s+/,' ',:g).trim;
-#--MARKER-- Test 16
+#--MARKER-- Test 14
 like $rv, /
     '<section name="pod">'
     \s* '<p>'
@@ -254,7 +215,7 @@ $pr = cache_test(++$fn, q:to/PODEND/);
     PODEND
 
 $rv = $pr.pod-body.subst(/\s+/,' ',:g).trim;
-#--MARKER-- Test 17
+#--MARKER-- Test 15
 like $rv, /
     '<section name="pod">'
     \s* '<p>'
@@ -275,7 +236,7 @@ $pr = cache_test(++$fn, q:to/PODEND/);
     PODEND
 
 $rv = $pr.pod-body.subst(/\s+/,' ',:g).trim;
-#--MARKER-- Test 18
+#--MARKER-- Test 16
 like $rv, /
     '<section name="pod">'
     \s* [ .+? 'use of the ' [ '&laquo;' | '&#171;' ]  ' and ' [ '&raquo;' | '&#187;' ] ' characters' ] **6
@@ -289,7 +250,7 @@ $pr = cache_test(++$fn, q:to/PODEND/);
     PODEND
 
 $rv = $pr.pod-body.subst(/\s+/,' ',:g).trim;
-#--MARKER-- Test 19
+#--MARKER-- Test 17
 like $rv, /
     '<section name="pod">'
     \s* '<p>'
@@ -306,7 +267,7 @@ $pr = cache_test(++$fn, q:to/PODEND/);
     PODEND
 
 $rv = $pr.pod-body.subst(/\s+/,' ',:g).trim;
-#--MARKER-- Test 20
+#--MARKER-- Test 18
 like $rv, /
     '<section name="pod">'
     \s* '<p>'
@@ -323,7 +284,7 @@ $pr = cache_test(++$fn, q:to/PODEND/);
     PODEND
 
 $rv = $pr.pod-body.subst(/\s+/,' ',:g).trim;
-#--MARKER-- Test 21
+#--MARKER-- Test 19
 like $rv, /
     '<section name="pod">'
     \s* '<p>'
@@ -340,7 +301,7 @@ $pr = cache_test(++$fn, q:to/PODEND/);
     PODEND
 
 $rv = $pr.pod-body.subst(/\s+/,' ',:g).trim;
-#--MARKER-- Test 22
+#--MARKER-- Test 20
 like $rv, /
     '<section name="pod">'
     \s* '<p>'
@@ -348,3 +309,25 @@ like $rv, /
     \s+ 'F&lt;a-filename.pod&gt;'
     \s+ 'between words.'
     /, 'Unknown format';
+
+$pr = cache_test(++$fn, q:to/PODEND/);
+    =begin pod
+
+    Some thing B<<a-filename.pod>> with multiple brackets.
+
+    Sequences of brackets I<<<here I am>>> and  T<<<<here I am>>>> that parse.
+
+    =end pod
+    PODEND
+
+$rv = $pr.pod-body.subst(/\s+/,' ',:g).trim;
+#--MARKER-- Test 21
+like $rv, /
+    '<section name="pod">'
+    \s* '<p>'
+    \s* 'Some thing'
+    \s+ '<strong>a-filename.pod</strong>'
+    \s+ 'with multiple brackets.'
+    .+ 'Sequences of brackets'
+    \s+ '<em>here I am</em> and <samp>here I am</samp> that parse.'
+    /, 'multiple brackets';

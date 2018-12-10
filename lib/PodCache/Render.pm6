@@ -77,7 +77,7 @@ Pod file names are assumed to have no spaces in them.
 =item2  path to a directory containing configuration files (see below)
 =item2 configuration files are rendered into a html files with links to the pod files.
 
-=item global-links
+=item collection-unique
 =item2 boolean default False
 =item2 if true href links in <a> tags must all be relative to collection (podfile appended to local link)
 =item2 if false links need only be unique relative to Processed
@@ -176,11 +176,10 @@ use File::Directory::Tree;
 use Data::Dump;
 use LibCurl::Easy;
 
-no precompilation;
 unit class PodCache::Render is Pod::To::Cached;
 
 has PodCache::Engine $.engine;
-has Bool $!global-links; # whether links must be unique to collection (True), or to Pod file (Default False)
+has Bool $!collection-unique; # whether links must be unique to collection (True), or to Pod file (Default False)
 has Bool $.verbose is rw;
 has Bool $.debug is rw;
 
@@ -195,6 +194,9 @@ has %.pfiles;
 has @!names; # ordered array of hash of names in cache, with directory paths
 has %.global-index;
 has @.global-links;
+has SetHash $.global-targets .= new;
+has SetHash $!links-tested .= new; # to avoid testing same external link twice
+has Bool $!new-index;
 
 submethod BUILD(
     :$templates = Str,
@@ -202,7 +204,7 @@ submethod BUILD(
     :$output = Str,
     :$config = Str,
     :$!assets = Str,
-    :$!global-links = False,
+    :$!collection-unique = False,
     :$!verbose = False,
     :$!debug = False,
     :$!clear-output = False,
@@ -233,7 +235,22 @@ method gen-index-files {
         .push(%(:item( %(:title('Index to all items in source files'), :link("global-index.$!rendering"), ) ) ) )
         ; # add to the bottom a link to the global index file.
     "$!config/index.yaml".IO.spurt: data('index-start') ~ save-yaml(%( :content( @params ) ,) ).subst(/^^  '---' $$ \s /,''); #take the top --- off the yaml file, its in data.
-    "$!config/global-index.yaml".IO.spurt: data('global-index-start') ~ save-yaml(%( :content( proforma( +%.global-index.keys ) ) ,) ).subst(/^^  '---' $$ \s /,'')
+    "$!config/global-index.yaml".IO.spurt: data('global-index-start') ~ save-yaml(%( :content( proforma( +%.global-index.keys ) ) ,) ).subst(/^^  '---' $$ \s /,'');
+    $!new-index = False;
+}
+
+method gen-missing-sources( @names ) {
+    note 'missing-sources index generated' if $!verbose;
+    if +@names {
+        note 'missing-sources index generated' if $!verbose;
+        my @content = @names.map( { %(:item( :filename( $_)))});
+        "$!config/missing-sources.yaml".IO.spurt: data('missing-sources-start') ~ save-yaml(%( :@content ) ).subst(/^^  '---' $$ \s /,'');
+    } else {
+        if "$!config/missing-sources.yaml".IO ~~ :f {
+            note 'missing-sources index removed' if $!verbose;
+            "$!config/missing-sources.yaml".IO.unlink
+        }
+    }
 }
 
 method make-names {
@@ -283,33 +300,41 @@ method processed-instance( :$name ) {
         :$name,
         :pod-tree( self.pod($name) ),
         :path( $.files{$name}<path> ),
-        :$!global-links,
+        :$!collection-unique,
         :templater( $!engine ),
         :$!debug,
-        :$!verbose
+        :$!verbose,
+        :file-ext( $!rendering ),
+        :$.files
     )
 }
 
-method process-cache( @names = $.files.keys ) { # only process cache for Tainted and New files, if given
-    for @names -> $filename {
-        next if %.pfiles{$filename}:exists; # process each filename only once.
-        my $pf = self.processed-instance( :name($filename) );
-        %.pfiles{$filename} = %(
-            :$pf ,
-        # todo include code for creating a single file
-            :link("$filename.$!rendering"),
-        );
-        for $pf.index.kv -> $entry, @data {
-            %!global-index{$entry} = Array unless %!global-index{$entry}:exists;
-            for @data -> %item {
-                %!global-index{$entry}.push: %(:target( "$filename.$!rendering" ~ %item<target>), :place( %item<place>), );
-                # global-links is for testing, but index items should have correct links
-                #@!global-links.push: %(:target( "$filename.$!rendering" ~ %item<target>), :place( %item<place>), :source($filename),)
-            }
+method process-cache( @names = $.files.keys ) {
+    note "Sources for processing:\n\t",@names.join("\n\t") if $!verbose;
+    self.process-name($_) for @names
+}
+
+method process-name( Str:D $filename ) {
+    return if %.pfiles{$filename}:exists; # process each filename only once.
+    my $pf = self.processed-instance( :name($filename) );
+    %.pfiles{$filename} = %(
+        :$pf ,
+    # todo include code for creating a single file
+        :link("$filename"),
+    );
+    for $pf.index.kv -> $entry, @data {
+        %!global-index{$entry} = Array unless %!global-index{$entry}:exists;
+        for @data -> %item {
+            %!global-index{$entry}.push: %(|%item, :source( $filename), );
+            # collection-unique is for testing, but index items should have correct links
+            #@!global-links.push: %(:target( "$filename.$!rendering" ~ %item<target>), :place( %item<place>), :source($filename),)
         }
-        for $pf.links {
-            @!global-links.push: %(|$_, :source($filename))
-        }
+    }
+    for $pf.links.list { # registered links out
+        @!global-links.push: %(|$_, :source($filename))
+    }
+    for $pf.targets.keys { # registered targets in file
+        $.global-targets{ $!collection-unique ?? $_ !! "$filename#$_" }++ # set automatically only keeps unique targets
     }
 }
 
@@ -317,50 +342,65 @@ method templates-changed {
     $!engine.over-ridden, 'from ' ~ $!engine.t-dir;
 }
 
-method links-test {
-    self.process-cache;
-    my LibCurl::Easy $curl .=new(:!verbose, :followlocation );
+method links-test(:$all = False) {
+    # only test the links in newly processed files, unless allow
+    self.process-cache if $all;
     my @responses =();
     for @.global-links.list -> %info {
-        $curl.setopt(:URL( %info<target>));
-        $curl.perform;
-        CATCH {
-            when X::LibCurl {
-                @responses.push: qq:to/RESPONSE/;
-                    Error: ｢{ %info<target> }｣ in source ｢{ %info<source> }｣ with label ｢{ %info<content> }｣
-                    generated response ｢{$curl.response-code}｣ with error ｢{$curl.error}｣
-                    RESPONSE
-            }
+        my Str $err;
+        my $inf = "link with label ｢{%info<content> }｣ in source ｢{ %info<source> }｣ ";
+        unless $.global-targets{ %info<target> } or $!links-tested{ ~%info<target> }++ { #first time encountered links-tested{} 0 so false, duplicates >0
+            # Any legitimate local target will be in the global-targets SetHash
+            # So link is external or mal-formed internal
+            $err = self.test-link( %info<target> );
+            @responses.push: $err
+                ?? "Error: $inf\n\t$err"
+                !! "OK: $inf with target { %info<target> }"
         }
-        unless $curl.success  {
-            @responses.push(qq:to/ERROR/);
-            Error: ｢{ %info<target> }｣ in source ｢{ %info<source> }｣ with label ｢{ %info<content> }｣
-            generated response ｢{$curl.response-code}｣ with error ｢{$curl.error}｣
-            ERROR
-        }
+        @responses.push( "OK: local target { %info<target> } $inf")
+            if $.global-targets{ %info<target> };
     }
     note "Links responses are:\n", @responses.join("\n\t") if +@responses and $!verbose ;
     @responses
 }
 
+method test-link($target --> Str ) {
+    state LibCurl::Easy $curl .=new(:$!verbose, :followlocation );
+    my Str $err;
+    CATCH {
+        when X::LibCurl {
+            $err = "｢$target｣ caused Exception ｢{$curl.response-code}｣ with error ｢{$curl.error}｣";
+            .resume # need to try an alternative
+        }
+    }
+    $curl.setopt(:URL( $target ));
+    $curl.perform; # this is where Exception should happen if it does
+    unless $curl.success or $err  {
+        $err = "｢$target｣ generated response ｢{$curl.response-code}｣ with error ｢{$curl.error}｣"
+    }
+    $err # Will return with undefined string if success
+}
+
 method update-collection {
+say "At $?LINE list-files: ", Dump(self.list-files( :all ));
+
     my @files = self.list-files( Pod::To::Cached::Failed );
     exit note( "The following pod sources failed\n", @files.join("\n\t") ) if +@files;
     @files = self.list-files( Pod::To::Cached::New);
-    if +@files {
-        # if a new file has been added, then the index files need to be recreated
-        self.write-indices;
-    }
-    @files.append: self.list-files( Pod::To::Cached::Tainted ); # add to new files
+    $!new-index = so +@files; # if a new file has been added, then the index files need to be recreated
+    @files.append: self.list-files(  :all ).grep( { $_ ~~ any( <Valid Tainted> ) } ); # add to new files
     self.create-collection( @files ) if +@files;
 }
 
-method create-collection(@names = %.pfiles.keys, :$clear = False ) {
+method create-collection(@names = $.files.keys.sort, :$clear = False ) {
+    note "Sources for processing:\n\t",@names.join("\n\t") if $!verbose;
+    note "Clearing $!output" if $!verbose and $clear;
     unless $!output-test {
         if $clear {
             rmtree $!output
         }
         unless "{$!output}/assets".IO ~~ :d {
+            $!new-index = True;
             mktree("$!output/assets") or die "Cannot create output directory at ｢{$!output}/assets｣";
             with $!assets {
                 for $!assets.IO.dir {
@@ -373,10 +413,13 @@ method create-collection(@names = %.pfiles.keys, :$clear = False ) {
                 %?RESOURCES<assets/pod.css>.copy: "$!output/assets/pod.css"
             }
         }
-        $!output-test = True;
     }
-    self.process-cache( @names );
-    self.file-wrap( %.pfiles{$_}<pf> ) for @names
+    for @names {
+        self.process-name( $_ );
+        self.file-wrap( %.pfiles{$_}<pf> )
+    }
+    note 'Writing new indices' if $!verbose and $!new-index;
+    self.write-indices if $!new-index;
 }
 
 method test-index-files( :$quiet  = False  ) {
@@ -385,13 +428,13 @@ method test-index-files( :$quiet  = False  ) {
     # then they will be put into the Misc section
     my @index-files = dir($!config, :test(/ '.yaml' /) );
     unless +@index-files {
-        note 'No index.yaml files so will generate defaults' if $!verbose;
+        note 'No *.yaml files so render functions will generate defaults' if $!verbose;
         return
             %( :not-in-index( $.files.keys ),
                 :not-in-cache( Nil ),
                 :duplicates-in-index( Nil ),
                 :index-and-cache( Nil ),
-                :errors( 'No index.yaml files, so will generate default files' , ) )
+                :errors( 'No *.yaml files' , ) )
     }
     my $residue = SetHash.new: $.files.keys;
     my $cache = Set.new: $.files.keys;
@@ -399,9 +442,9 @@ method test-index-files( :$quiet  = False  ) {
     my @not-in-cache = ();
     my @duplicates-in-index = ();
     my @errors = ();
-    my %single-index;
     for @index-files -> $fn {
-        %single-index = load-yaml( $fn.slurp );
+        next if ~$fn ~~ /'missing-sources'/; # will regenerate missing...
+        my %single-index = load-yaml( $fn.slurp );
         CATCH {
             default {
                 @errors.push: "With ｢{ $fn.basename }｣: { .payload }"
@@ -409,32 +452,39 @@ method test-index-files( :$quiet  = False  ) {
         } # leaves for block if error found
         if %single-index<type>:exists and %single-index<type> eq 'global-index' {
             #TODO
+            # Question is what sort of behaviour is wrong
+            # Perhaps test viability of regexen ?
         }
         else {
-            @errors.push("With $fn: No title") unless %single-index<title>:exists;
-            for %single-index<content>.kv -> $entry, %info {
-                @errors.push("With $fn: No header text at entry # $entry")
-                    if %info<header>:exists and %info<header><text>:!exists;
-                if %info<item>:exists {
-                    if %info<item><filename>:exists {
-                        my $ifn = %info<item><filename>;
-                        if $residue{ $ifn }-- {
-                            @index-and-cache.push: ~$fn
-                        }
-                        else {
-                            if $cache{ $ifn } {
-                                @duplicates-in-index.push: ~$ifn
+            @errors.push("With ｢$fn｣: No title") unless %single-index<title>:exists;
+            with %single-index<content> {
+                for %single-index<content>.kv -> $entry, %info {
+                    @errors.push("With ｢$fn｣: No header text at entry # $entry")
+                        if %info<header>:exists and %info<header><text>:!exists;
+                    if %info<item>:exists {
+                        if %info<item><filename>:exists {
+                            my $ifn = %info<item><filename>;
+                            if $residue{ $ifn }-- {
+                                @index-and-cache.push: $ifn
                             }
                             else {
-                                @not-in-cache.push: ~$ifn
+                                if $cache{ $ifn } {
+                                    @duplicates-in-index.push: ~$ifn
+                                }
+                                else {
+                                    @not-in-cache.push: ~$ifn
+                                }
                             }
                         }
-                    }
-                    else {
-                        @errors.push("With $fn: No item filename or ( link & title) at entry # $entry")
-                            unless %info<item><link>:exists and  %info<item><title>:exists
+                        else {
+                            @errors.push("With ｢$fn｣: No item filename or ( link & title) at entry # $entry")
+                                unless %info<item><link>:exists and  %info<item><title>:exists
+                        }
                     }
                 }
+            }
+            else {
+                @errors.push("With ｢$fn｣: No content list")
             }
         }
     }
@@ -450,7 +500,10 @@ method test-index-files( :$quiet  = False  ) {
         note "Source names not in cache but in config file(s): ",
             (+@not-in-cache ?? ("\n\t" ~ @not-in-cache.join("\n\t")) !! "None" );
     }
-    %( :not-in-index( $residue.keys>>.Str ),
+    my @not-in-index = $residue.keys>>.Str;
+    self.gen-missing-sources(@not-in-index )
+        if +@not-in-index;
+    %( :@not-in-index,
         :@not-in-cache,
         :@duplicates-in-index,
         :@index-and-cache,
@@ -458,14 +511,15 @@ method test-index-files( :$quiet  = False  ) {
 }
 
 method write-indices {
-    my %test = self.test-index-files(:quiet( ! $!verbose)); # make sure we can read the index files
-    exit note "Cannot write index files because: " ~ %test<errors>.join("\n\t") if +%test<errors>;
-    # if no yaml files in Config (default Output), generate two in Output
     my @index-files = dir($!config, :test(/ '.yaml' /) );
-    unless +@index-files {
+    if +@index-files {
+        my %test = self.test-index-files(:quiet( ! $!verbose)); # make sure we can read the index files
+        exit note "Cannot write index files because: " ~ %test<errors>.join("\n\t") if +%test<errors>;
+    }
+    else {
         #defaults when no given in CONFIG
         self.gen-index-files;
-        @index-files = <index.yaml global-index.yaml>.map( "$!config/$_".IO );
+        @index-files = <index global-index>.map( { "$!config/$_.yaml".IO } );
         # these do not need to be tested because they are generated correctly
     }
     for @index-files {
@@ -474,18 +528,16 @@ method write-indices {
         "$!output/$fn.$!rendering".IO.spurt:
             $!engine.rendition((%params<type> eq 'global-index' ?? 'global-indexation-file' !! 'indexation-file'), %params);
     }
-
 }
 
 method process-index( $fn ) {
     my %index = load-yaml( $fn.slurp );
-    my %params = :title(%index<title>), :body( Str ), :path( ~$fn ), :type( %index<type> // 'normal' );
+    my %params = :title(%index<title>), :body( '' ), :path( ~$fn ), :type( %index<type> // 'normal' );
     my $body := %params<body>;
     $body ~=
         $!engine.rendition('title', %( :text(%index<title>), :target<__top> ) )
         ~ ( %index<subtitle>:exists ?? $!engine.rendition('subtitle', %(:contents( %index<subtitle>) ) ) !! '' );
-
-    with %index<type> and %index<type> eq 'global-index' {
+    if %index<type>:exists and %index<type> eq 'global-index' {
         my SetHash $residue .= new: %.global-index.keys;
         for %index<content>.list -> %entry {
             $body ~= $!engine.rendition('global-indexation-heading', %(
@@ -516,17 +568,15 @@ method process-index( $fn ) {
         }
     }
     else {
-        $body ~=
-            [~] gather for %index<content>.list -> %entry {
-                take $!engine.rendition('indexation-heading', %(
-                    :level( %entry<header><level>),
-                    :text(%entry<header><text>) ,
-                    :subtitle( %entry<header><subtitle> // ''),
-                ) ) if %entry<header>:exists;
-                take $!engine.rendition('indexation-entry', self.pf-params( %entry<item> ) )
-                    if %entry<item>:exists;
-            }
-        ;
+        for %index<content>.list -> %entry {
+            $body ~= $!engine.rendition('indexation-heading', %(
+                :level( %entry<header><level>),
+                :text(%entry<header><text>) ,
+                :subtitle( %entry<header><subtitle> // ''),
+            ) ) if %entry<header>:exists;
+            $body ~= $!engine.rendition('indexation-entry', self.pf-params( %entry<item> ) )
+                if %entry<item>:exists;
+        }
     }
     %params
 }
@@ -660,6 +710,39 @@ sub data($item) {
                 type: global-index
                 title: Global Index of Perl 6 Documentation
                 subtitle: Links to indexed items in all files in document collection.
+
+                DATA
+        }
+        when 'missing-sources-start' {
+            q:to/DATA/;
+                ---
+                # This is a configuration file that will be interpreted by C<PodCache::Render>
+                # to create an index file containing the sources missing in existing indices
+                # The indexation-file template should typically be over-ridden.
+
+                # The structure of an index file is as follows
+                # - title: text in the title # mandatory
+                # - subtitle: paragraph immediately following the title # optional
+                # - head:
+                #    level: an optional attribute and will be used for the header level
+                #    text: a required attribute. Is the text of the header
+                #    subtitle: optional. Paragraph following heading.
+                # - item:
+                #      filename: the name of file in the document cache
+                #        # if the filename is missing, no error is generated
+                #        # if the file corresponding to the filename does not exist, no error is generated
+                #        # Consequently, links other files, such as other index files, can be included by
+                #        # ommiting the filename, or using one not in the cache, whilst providing
+                #        # a link and text  (see below)
+                #     # the following are optional and when absent, the data is taken from the pod file attributes
+                #     title: the text to be used to refer to the filename in place of the pod's TITLE attribute
+                #     subtitle: text used instead of the pod's SUBTITLE attribute
+                #     link: the link to be used to refer to the file instead of the URL generated from the pod file name
+                #     toc: whether or not to include the pod file's toc. Defaults to True
+
+                title: Perl 6 Missing Sources
+                subtitle: Links to the rendered pod files, one for each file in the document cache. Listed alphabetically.
+                    Where pod files are arranged in sub-directories, the path is used as a heading.
 
                 DATA
         }
