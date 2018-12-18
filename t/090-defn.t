@@ -1,6 +1,7 @@
 #!perl6
 
 use Test;
+use File::Directory::Tree;
 
 # do NOT move this below `Pod::To::HTML` line, the module exports a fake Pod::Defn
 constant no-pod-defn = ::('Pod::Defn') ~~ Failure;
@@ -15,12 +16,14 @@ my $fn = 'defn-test-pod-file_0';
 
 constant REP = 't/tmp/rep';
 constant DOC = 't/tmp/doc';
+constant OUTPUT = 't/tmp/html';
 
+mktree OUTPUT unless OUTPUT.IO ~~ :d;
 my PodCache::Processed $pr;
 
 sub cache_test(Str $fn is copy, Str $to-cache --> PodCache::Processed ) {
     (DOC ~ "/$fn.pod6").IO.spurt: $to-cache;
-    my PodCache::Render $ren .= new(:path( REP ) );
+    my PodCache::Render $ren .= new(:path( REP ), :output( OUTPUT ) );
     $ren.update-cache;
     $ren.processed-instance( :name($fn) );
 }

@@ -70,16 +70,12 @@ sub tmpl-data {
     'block-code' => '<pre class="pod-block-code{{# addClass }} {{ addClass }}{{/ addClass}}">{{# contents }}{{{ contents }}}{{/ contents }}</pre>
     ',
 
-    'body-wrap' => '<!-- Start of ｢{{ name }}｣ -->
-    {{{ body }}}
-    ',
-
     'comment' => '<!-- {{{ contents }}} -->',
 
     'defn' => '<dl><dt>{{ term }}</dt><dd>{{{ contents }}}</dd></dl>
     ',
 
-    'file-wrap' => '<!doctype html>
+    'source-wrap' => '<!doctype html>
     <html lang="en">
         <head>
             <title>{{ title }}</title>
@@ -123,6 +119,8 @@ sub tmpl-data {
     'format-n' => '<sup><a name="{{ retTarget }}" href="#{{ fnTarget }}">[{{ fnNumber }}]</a></sup>
     ',
 
+    'format-p' => '<div{{# addClass }} class="{{ addClass }}"{{/ addClass }}>{{^ html }}<pre>{{/ html }}{{{ contents }}}{{^ html }}</pre>{{/ html }}</div>',
+
     'format-r' => '<var{{# addClass }} class="{{ addClass }}"{{/ addClass }}>{{{ contents }}}</var>',
 
     'format-t' => '<samp{{# addClass }} class="{{ addClass }}"{{/ addClass }}>{{{ contents }}}</samp>',
@@ -133,7 +131,7 @@ sub tmpl-data {
 
     'global-indexation-defn-list' => '<dl class="global-indexation">
         {{# list }}
-            <dt>{{ text }}</dt> {{# refs }}<dd><a href="{{ source }}#{{ target }}">{{{ place }}}</a></dd>{{/ refs }}
+            <dt>{{ text }}</dt> {{# refs }}<dd><a href="{{ source }}#{{ target }}">{{{ location }}} : {{{ place }}}</a></dd>{{/ refs }}
         {{/ list }}
     </dl>
     ',
@@ -214,6 +212,12 @@ sub tmpl-data {
     {{/ meta }}
     ',
 
+    'named' => '<section name="{{ name }}">
+        <h{{# level }}{{ level }}{{/ level }} id="{{ target }}"><a href="#{{ top }}" class="u" title="go to top of document">{{{ name }}}</a></h{{# level }}{{ level }}{{/ level }}>
+        {{{ contents }}}
+        </section>
+    ',
+
     'notimplemented' => '<span class="pod-block-notimplemented">{{{ contents }}}</span>',
 
     'output' => '<pre class="pod-output">{{{ contents }}}</pre>',
@@ -243,7 +247,7 @@ sub tmpl-data {
             <caption><h2 id="TOC_Title">Table of Contents</h2></caption>
             {{# toc }}
             <tr class="toc-level-{{ level }}">
-                <td class="toc-text"><a href="#{{ target }}">{{{ text }}}</a></td>
+                <td class="toc-text"><a href="#{{ target }}">{{ text }}</a></td>
             </tr>
             {{/ toc }}
         </table>

@@ -2,6 +2,7 @@ use lib 'lib';
 use Test;
 use PodCache::Render;
 use PodCache::Processed;
+use File::Directory::Tree;
 
 plan 6;
 diag "lists, placement";
@@ -10,12 +11,14 @@ my $fn = 'lists-test-pod-file_0';
 
 constant REP = 't/tmp/rep';
 constant DOC = 't/tmp/doc';
+constant OUTPUT = 't/tmp/html';
 
+mktree OUTPUT unless OUTPUT.IO ~~ :d;
 my PodCache::Processed $pr;
 
 sub cache_test(Str $fn is copy, Str $to-cache --> PodCache::Processed ) {
     (DOC ~ "/$fn.pod6").IO.spurt: $to-cache;
-    my PodCache::Render $ren .= new(:path( REP ) );
+    my PodCache::Render $ren .= new(:path( REP ), :output( OUTPUT ) );
     $ren.update-cache;
     $ren.processed-instance( :name($fn) );
 }
@@ -38,7 +41,7 @@ $pr = cache_test(++$fn, q:to/PODEND/);
 
 #--MARKER-- Test 1
 like $pr.pod-body.subst(/\s+/,' ',:g).trim, /
-    '<section name="pod">'
+    '<section name="___top">'
     \s*'<p>The seven suspects are:</p>'
     \s* '<ul>'
     \s* '<li>' \s* '<p>Happy</p>' \s* '</li>'
@@ -200,10 +203,13 @@ $pr = cache_test(++$fn, q:to/PODEND/);
     =begin pod
 
     =COPYRIGHT
-    P<https://github.com/rakudo/rakudo/blob/master/LICENSE>
+    P<https://raw.githubusercontent.com/rakudo/rakudo/master/LICENSE>
 
     =DISCLAIMER
     P<file:t/tmp/disclaimernotice>
+
+    =DOCUMENTS
+    P<https://doc.perl6.org>
 
     =end pod
     PODEND
@@ -211,9 +217,11 @@ $pr = cache_test(++$fn, q:to/PODEND/);
 #--MARKER-- Test 6
 like $pr.pod-body.subst(/\s+/,' ',:g).trim,
         /
-            'The Artistic License 2.0'
+            'Artistic License 2.0'
             .+
             'ABSOLUTELY NO WARRANTY IS IMPLIED'
-        /, 'Seems to have got both docs';
+            .+
+            'Perl' \s '6 Documentation'
+        /, 'Seems to have got all three docs';
 
 #done-testing

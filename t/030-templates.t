@@ -10,7 +10,9 @@ plan 4;
 constant REP = 't/tmp/rep';
 constant DOC = 't/tmp/doc';
 constant TEMPL = 't/tmp/templates';
+constant OUTPUT = 't/tmp/html';
 
+mktree OUTPUT unless OUTPUT.IO ~~ :d;
 rmtree TEMPL;
 mktree TEMPL ~ '/html';
 diag "templates";
@@ -19,7 +21,7 @@ my $fn = 'templates-test-pod-file_0';
 
 (TEMPL ~ "/html/para.mustache").IO.spurt: '<p class="special {{# addClass }} {{ addClass }}{{/ addClass }}">{{{ contents }}}</p>';
 
-my PodCache::Render $renderer .= new(:path(REP), :templates( TEMPL ));
+my PodCache::Render $renderer .= new(:path(REP), :templates( TEMPL ), :output( OUTPUT ));
 my PodCache::Processed $pf = $renderer.processed-instance(:name<a-second-pod-file> );
 
 #--MARKER-- Test 1

@@ -8,13 +8,15 @@ plan 3;
 
 constant REP = 't/tmp/rep';
 constant DOC = 't/tmp/doc';
+constant OUTPUT = 't/tmp/html';
 my $fn = 'non-breaking-space-test-pod-file_0';
 
+mktree OUTPUT unless OUTPUT.IO ~~ :d;
 my PodCache::Processed $pr;
 
 sub cache_test(Str $fn is copy, Str $to-cache --> PodCache::Processed ) {
     (DOC ~ "/$fn.pod6").IO.spurt: $to-cache;
-    my PodCache::Render $ren .= new(:path( REP ) );
+    my PodCache::Render $ren .= new(:path( REP ), :output( OUTPUT ) );
     $ren.update-cache;
     $ren.processed-instance( :name($fn) );
 }
@@ -25,7 +27,11 @@ $pr = cache_test(++$fn, q:to/PODEND/);
     PODEND
 
 #--MARKER-- Test 1
-like $pr.pod-body, /'<section name="foo">' \s* '</section>' /, 'section test';
+like $pr.pod-body, /
+    '<section name="Foo">'
+    \s* '<h' .+ '<a' .+ 'Foo'
+    .+ '</section>'
+    /, 'section test';
 
 $pr = cache_test(++$fn, q:to/PODEND/);
     =begin foo
@@ -33,7 +39,13 @@ $pr = cache_test(++$fn, q:to/PODEND/);
     =end foo
     PODEND
 #--MARKER-- Test 2
-like $pr.pod-body, / '<section name="foo">' \s* '<p>' \s* 'some text' \s* '</p>' \s* '</section>'/ , 'section + heading';
+like $pr.pod-body, /
+    '<section name="Foo">'
+    \s* '<h' .+ '<a' .+ 'Foo'
+    '</a></h'
+    .+ 'some text'
+    .+ '</section>'
+    /, 'section + heading';
 
 $pr = cache_test(++$fn, q:to/PODEND/);
     =head1 Talking about Perl 6

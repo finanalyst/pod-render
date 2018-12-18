@@ -2,6 +2,7 @@ use lib 'lib';
 use Test;
 use PodCache::Render;
 use PodCache::Processed;
+use File::Directory::Tree;
 
 plan 21;
 diag "format codes";
@@ -9,13 +10,15 @@ my $fn = 'format-codes-test-pod-file_0';
 
 constant REP = 't/tmp/rep';
 constant DOC = 't/tmp/doc';
+constant OUTPUT = 't/tmp/html';
 
+mktree OUTPUT unless OUTPUT.IO ~~ :d;
 my PodCache::Processed $pr;
 my Str $rv;
 
 sub cache_test(Str $fn is copy, Str $to-cache --> PodCache::Processed ) {
     (DOC ~ "/$fn.pod6").IO.spurt: $to-cache;
-    my PodCache::Render $ren .= new(:path( REP ) );
+    my PodCache::Render $ren .= new(:path( REP ), :output( OUTPUT ) );
     $ren.update-cache;
     $ren.processed-instance( :name($fn) );
 }
@@ -46,7 +49,7 @@ $pr = cache_test(++$fn, q:to/PODEND/);
 $rv = $pr.pod-body.subst(/\s+/,' ',:g).trim;
 #--MARKER-- Test 3
 like $rv, /
-    '<section name="pod">'
+    '<section name="___top">'
     \s* '<p>'
     \s* 'Some thing to say'
     \s+ '<sup><a name="fnret' .+ '" href="#fn' .+ '">[' \d+ ']</a></sup>'
@@ -79,7 +82,7 @@ $pr = cache_test(++$fn, q:to/PODEND/);
 $rv = $pr.pod-body.subst(/\s+/,' ',:g).trim;
 #--MARKER-- Test 5
 like $rv, /
-    '<section name="pod">'
+    '<section name="___top">'
     \s* '<p>'
     \s* 'Some thing to'
     \s+ '<strong>say</strong>'
@@ -103,7 +106,7 @@ $pr = cache_test(++$fn, q:to/PODEND/);
 $rv = $pr.pod-body.subst(/\s+/,' ',:g).trim;
 #--MARKER-- Test 7
 like $rv, /
-    '<section name="pod">'
+    '<section name="___top">'
     \s* '<p>'
     \s* 'Some thing to'
     \s+ '<em>say</em>'
@@ -127,7 +130,7 @@ $pr = cache_test(++$fn, q:to/PODEND/);
 $rv = $pr.pod-body.subst(/\s+/,' ',:g).trim;
 #--MARKER-- Test 9
 like $rv, /
-    '<section name="pod">'
+    '<section name="___top">'
     \s* '<p>'
     \s* 'Some thing to'
     \s+ '<u>say</u>'
@@ -150,7 +153,7 @@ $pr = cache_test(++$fn, q:to/PODEND/);
 $rv = $pr.pod-body.subst(/\s+/,' ',:g).trim;
 #--MARKER-- Test 11
 like $rv, /
-    '<section name="pod">'
+    '<section name="___top">'
     \s* '<p>'
     \s* 'Some thing to'
     \s+ '<strong><em>say</em> embedded</strong>'
@@ -166,7 +169,7 @@ $pr = cache_test(++$fn, q:to/PODEND/);
 $rv = $pr.pod-body.subst(/\s+/,' ',:g).trim;
 #--MARKER-- Test 12
 like $rv, /
-    '<section name="pod">'
+    '<section name="___top">'
     \s* '<p>'
     \s* 'Some thing to'
     \s+ '<code>say</code>'
@@ -183,7 +186,7 @@ $pr = cache_test(++$fn, q:to/PODEND/);
 $rv = $pr.pod-body.subst(/\s+/,' ',:g).trim;
 #--MARKER-- Test 13
 like $rv, /
-    '<section name="pod">'
+    '<section name="___top">'
     \s* '<p>'
     \s* 'Some thing to'
     \s+ '<kbd>say</kbd>'
@@ -200,7 +203,7 @@ $pr = cache_test(++$fn, q:to/PODEND/);
 $rv = $pr.pod-body.subst(/\s+/,' ',:g).trim;
 #--MARKER-- Test 14
 like $rv, /
-    '<section name="pod">'
+    '<section name="___top">'
     \s* '<p>'
     \s* 'Some thing to'
     \s+ '<var>say</var>'
@@ -217,7 +220,7 @@ $pr = cache_test(++$fn, q:to/PODEND/);
 $rv = $pr.pod-body.subst(/\s+/,' ',:g).trim;
 #--MARKER-- Test 15
 like $rv, /
-    '<section name="pod">'
+    '<section name="___top">'
     \s* '<p>'
     \s* 'Some thing to'
     \s+ '<samp>say</samp>'
@@ -238,7 +241,7 @@ $pr = cache_test(++$fn, q:to/PODEND/);
 $rv = $pr.pod-body.subst(/\s+/,' ',:g).trim;
 #--MARKER-- Test 16
 like $rv, /
-    '<section name="pod">'
+    '<section name="___top">'
     \s* [ .+? 'use of the ' [ '&laquo;' | '&#171;' ]  ' and ' [ '&raquo;' | '&#187;' ] ' characters' ] **6
     /, 'Unicode E format 6 times same';
 
@@ -252,7 +255,7 @@ $pr = cache_test(++$fn, q:to/PODEND/);
 $rv = $pr.pod-body.subst(/\s+/,' ',:g).trim;
 #--MARKER-- Test 17
 like $rv, /
-    '<section name="pod">'
+    '<section name="___top">'
     \s* '<p>'
     \s* 'Perl 6 is awesome without doubt.'
     /, 'Z format';
@@ -263,17 +266,21 @@ $pr = cache_test(++$fn, q:to/PODEND/);
     We can L<Link to a place|https://docs.perl6.org> with no problem.
 
     This L<link should fail|https://xxxxxioioioi.com> with a bad response code.
+
+    We can L<link to an index test code|format-code-index-test-pod-file_2#t_an_item> with more text.
+
     =end pod
     PODEND
 
 $rv = $pr.pod-body.subst(/\s+/,' ',:g).trim;
 #--MARKER-- Test 18
 like $rv, /
-    '<section name="pod">'
+    '<section name="___top">'
     \s* '<p>'
     \s* 'We can'
     \s* '<a href="https://docs.perl6.org">Link to a place</a>'
     \s* 'with no problem.'
+    .+ '<a href="format-code-index-test-pod-file_2#t_an_item">' \s* 'link to an index test code'
     /, 'L format';
 
 $pr = cache_test(++$fn, q:to/PODEND/);
@@ -286,7 +293,7 @@ $pr = cache_test(++$fn, q:to/PODEND/);
 $rv = $pr.pod-body.subst(/\s+/,' ',:g).trim;
 #--MARKER-- Test 19
 like $rv, /
-    '<section name="pod">'
+    '<section name="___top">'
     \s* '<p>'
     \s* 'Some thing to'
     \s+ 'B&lt;say&gt;'
@@ -303,7 +310,7 @@ $pr = cache_test(++$fn, q:to/PODEND/);
 $rv = $pr.pod-body.subst(/\s+/,' ',:g).trim;
 #--MARKER-- Test 20
 like $rv, /
-    '<section name="pod">'
+    '<section name="___top">'
     \s* '<p>'
     \s* 'Some thing'
     \s+ 'F&lt;a-filename.pod&gt;'
@@ -323,7 +330,7 @@ $pr = cache_test(++$fn, q:to/PODEND/);
 $rv = $pr.pod-body.subst(/\s+/,' ',:g).trim;
 #--MARKER-- Test 21
 like $rv, /
-    '<section name="pod">'
+    '<section name="___top">'
     \s* '<p>'
     \s* 'Some thing'
     \s+ '<strong>a-filename.pod</strong>'

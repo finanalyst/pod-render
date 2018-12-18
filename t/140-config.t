@@ -42,19 +42,19 @@ $renderer.update-cache;
 
 my %test;
 #--MARKER-- Test 2
-lives-ok { %test = $renderer.test-index-files(:quiet) }, 'test non-existent index files';
+lives-ok { %test = $renderer.test-config-files(:quiet) }, 'test non-existent index files';
 #--MARKER-- Test 3
 is-deeply %test<errors>, ('No *.yaml files' , ), 'without files generated error';
 
 #--MARKER-- Test 4
-lives-ok {  $renderer.gen-index-files }, 'gen-index-files lives';
+lives-ok {  $renderer.generate-config-files }, 'generate-config-files lives';
 
 #--MARKER-- Test 5
 ok (CONFIG ~ '/index.yaml').IO ~~ :f, 'index.yaml created';
 #--MARKER-- Test 6
 ok (CONFIG ~ '/global-index.yaml').IO ~~ :f, 'global-index.yaml created';
 #--MARKER-- Test 7
-stderr-like { %test = $renderer.test-index-files }, /
+stderr-like { %test = $renderer.test-config-files }, /
     'Errors found:' \s* 'None'
     .+ 'Number in cache' .+ \d+
     .+ 'not in config file(s):' \s* 'None'
@@ -117,7 +117,7 @@ my $files-in-cache = %test<index-and-cache>;
                 filename: sub-dir-3/a-file-4
     ENDYAML
 
-%test = $renderer.test-index-files(:quiet);
+%test = $renderer.test-config-files(:quiet);
 #--MARKER-- Test 13
 is +%test<duplicates-in-index>, 3, 'pseudo index expected duplicates';
 #--MARKER-- Test 14
@@ -148,7 +148,7 @@ is +%missing<content>, $files-in-cache - 5, 'all missing sources names are in mi
                 filename: sub-dir-1/a-file-4
     ENDYAML
 
-%test = $renderer.test-index-files(:quiet);
+%test = $renderer.test-config-files(:quiet);
 #--MARKER-- Test 19
 is +%test<duplicates-in-index>, 3, 'multiple psuedo index expected duplicates';
 #--MARKER-- Test 20

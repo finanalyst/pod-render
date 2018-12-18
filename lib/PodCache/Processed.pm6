@@ -2,16 +2,15 @@ use v6.c;
 use PodCache::Engine;
 constant TOP = '___top'; # the name of the anchor at the top of a source file
 constant MAX-LINK-CHARS = 40; # the maximum number of chars in a link
-use Data::Dump;
 use URI;
 use LibCurl::Easy;
 
 unit class PodCache::Processed;
     has Str $.name;
-    has Str $.title is rw;
-    has Str $.sub-title is rw;
+    has Str $.title is rw = $!name;
+    has Str $.subtitle is rw = '';
     has Str $.path; # may/may not exist, but is path of original document
-    has Str $.top; # target for TITLE
+    has Str $.top is rw; # defaults to top, then becomes target for TITLE
     has $.pod-tree; # cached pod
     has Str $.pod-body; # generated html
     has @.toc = ();
@@ -26,10 +25,8 @@ unit class PodCache::Processed;
     has @.metalist = ();
     has Bool $!collection-unique;
     has $!file-ext = 'html'; # most likely
-    has $!files; # link to cached files for link re-write
     has Bool $!in-defn-list = False;
-
-    my PodCache::Engine $engine;
+    has PodCache::Engine $.engine;
 
     submethod BUILD  (
         :$!name,
@@ -37,27 +34,25 @@ unit class PodCache::Processed;
         :$!pod-tree,
         :$!debug = False,
         :$!verbose = False,
-        :$templater,
-        :$!collection-unique,
+        :$!engine = PodCached::Engine.new,
+        :$!collection-unique = False,
         :$!path = '',
-        :$!file-ext,
-        :$!files,
-        ) { $engine = $templater }
+        ) { }
 
     submethod TWEAK {
         $!top = self.unique-target( TOP );
         self.process-pod;
     }
 
-    method register-toc(:$level!, :$text! --> Str) {
+    method register-toc(:$level!, :$text!, Bool :$is-title = False --> Str) {
         @!counters[$level - 1]++;
         @!counters.splice($level);
         my $target = self.unique-target('t_' ~ @!counters>>.Str.join: '_') ;
-        @!toc.push: %( :$level, :$text, :$target);
+        @!toc.push: %( :$level, :$text, :$target, :$is-title );
         $target
     }
     method render-toc( --> Str ) {
-        $engine.rendition('toc', %( :toc( @!toc )  ));
+        $!engine.rendition('toc', %( :toc( [@!toc.grep( { !( .<is-title>) } )] )  ));
     }
     method register-index(Str $text, @entries, Bool $is-header --> Str) {
         my $target;
@@ -86,11 +81,10 @@ unit class PodCache::Processed;
     }
     method render-index(-->Str) {
         return '' unless +%!index.keys; #No render without any keys
-        $engine.rendition( 'index', %( :index([gather for %!index.sort {  take %(:text(.key), :refs( [.value.sort] )) } ])  )  )
+        $!engine.rendition( 'index', %( :index([gather for %!index.sort {  take %(:text(.key), :refs( [.value.sort] )) } ])  )  )
     }
     method register-link(Str $entry, Str $target --> Str) {
         my $content= $entry ?? $entry !! $target;
-        $target ~= ".$!file-ext" if $target ~~ any( $!files.keys );
         @!links.push: %( :$content, :$target);
         $target
     }
@@ -103,18 +97,18 @@ unit class PodCache::Processed;
     }
     method render-footnotes(--> Str){
         return '' unless +@!footnotes; # no rendering of code if no footnotes
-        $engine.rendition('footnotes', %( :notes( @!footnotes )  ) )
+        $!engine.rendition('footnotes', %( :notes( @!footnotes )  ) )
     }
     method register-meta( :$name, :$value ) {
         push @!metalist: %( :$name, :$value )
     }
     method render-meta {
         return '' unless +@!metalist;
-        $engine.rendition('meta', %( :meta( @!metalist )  ))
+        $!engine.rendition('meta', %( :meta( @!metalist )  ))
     }
     method process-pod {
         state $processed =0;
-        say "pod-tree is:" ~ Dump($!pod-tree) if $.debug;
+        say "pod-tree is:" ~ $!pod-tree if $.debug;
         print "Processing pod #{++$processed } for $.name " if $!verbose;
         my $time = now;
         $!pod-body = [~] $!pod-tree>>.&handle( 0, self );
@@ -124,7 +118,7 @@ unit class PodCache::Processed;
     method unique-target(Str $candidate-name is copy --> Str ) {
         $candidate-name = $candidate-name.subst(/\s+\.*|\./,'_',:g).subst(/<-alnum>/,'',:g).substr(0, MAX-LINK-CHARS );
         $candidate-name = ($!collection-unique ?? $!name.subst([\/], '_') !! '') ~ $candidate-name;
-        $candidate-name ~= '_1' if $candidate-name (<) $!targets;
+        $candidate-name ~= '_0' if $candidate-name (<) $!targets;
         ++$candidate-name while $!targets{$candidate-name};
         $!targets{ $candidate-name }++; # now add to targets
         $candidate-name
@@ -137,14 +131,14 @@ unit class PodCache::Processed;
         while $top-level > $in-level {
             if $top-level > 1 {
                 @.itemlist[$top-level - 2][0] = '' unless @.itemlist[$top-level - 2][0]:exists;
-                @.itemlist[$top-level - 2][* - 1] ~= $engine.rendition('list', %( :items( @.itemlist.pop )  ))
+                @.itemlist[$top-level - 2][* - 1] ~= $!engine.rendition('list', %( :items( @.itemlist.pop )  ))
             }
             else {
-                $rv ~= $engine.rendition('list', %( :items( @.itemlist.pop )  ))
+                $rv ~= $!engine.rendition('list', %( :items( @.itemlist.pop )  ))
             }
             $top-level = @.itemlist.elems
         }
-        $rv ~= $engine.rendition($key, %params);
+        $rv ~= $!engine.rendition($key, %params);
     }
 
     my enum Context <None Index Heading HTML Raw Output>;
@@ -167,19 +161,35 @@ unit class PodCache::Processed;
     }
 
     multi sub handle (Pod::Block::Named $node, Int $in-level, PodCache::Processed $pf  --> Str ) {
-        $pf.completion($in-level, 'section', %( :name($node.name), :contents( [~] $node.contents>>.&handle($in-level, $pf ))   ))
+        my $target = $pf.register-toc( :1level, :text( $node.name.tclc ) );
+        $pf.completion($in-level, 'named', %(
+            :name($node.name.tclc),
+            :$target,
+            :1level,
+            :contents( [~] $node.contents>>.&handle($in-level, $pf )),
+            :top( $pf.top )
+        ))
+    }
+
+    multi sub handle (Pod::Block::Named $node where $node.name.lc eq 'pod', Int $in-level, PodCache::Processed $pf  --> Str ) {
+        my $name = $pf.top eq TOP ?? TOP !! 'pod' ; # TOP, until TITLE changes it. Will fail if multiple pod without TITLE
+        $pf.completion($in-level, 'section', %(
+            :$name,
+            :contents( [~] $node.contents>>.&handle($in-level, $pf ))
+        ))
     }
 
     multi sub handle (Pod::Block::Named $node where $node.name eq 'TITLE', Int $in-level, PodCache::Processed $pf --> Str ) {
         my $addClass = ($node.config && $node.config<class> ?? ' ' ~ $node.config<class> !! '');
         my $text = $pf.title = $node.contents[0].contents[0].Str;
+        $pf.top = $pf.register-toc(:1level, :$text, :is-title );
         my $target = $pf.top;
         $pf.completion($in-level, 'title', %( :$addClass, :$target, :$text  ) )
     }
 
     multi sub handle (Pod::Block::Named $node where $node.name eq 'SUBTITLE', Int $in-level, PodCache::Processed $pf --> Str ) {
         my $addClass = ($node.config && $node.config<class> ?? ' ' ~ $node.config<class> !! '');
-        my $content = $node.contents[0].contents[0].Str;
+        my $content = $pf.subtitle = $node.&handle($in-level,$pf, None);
         $pf.completion($in-level, 'subtitle', %( :$addClass, :$content  ) )
     }
 
@@ -251,27 +261,27 @@ unit class PodCache::Processed;
         my $level = $node.level - 1;
         while $level < $in-level {
             --$in-level;
-            $pf.itemlist[$in-level]  ~= $engine.rendition('list', %( :items( $pf.itemlist.pop ) ) )
+            $pf.itemlist[$in-level]  ~= $pf.engine.rendition('list', %( :items( $pf.itemlist.pop ) ) )
         }
         while $level >= $in-level {
             $pf.itemlist[$in-level] = []  unless $pf.itemlist[$in-level]:exists;
             ++$in-level
         }
-        $pf.itemlist[$in-level - 1 ].push: $engine.rendition('item', %( :$addClass, :contents([~] $node.contents>>.&handle($in-level, $pf ) )  ) );
+        $pf.itemlist[$in-level - 1 ].push: $pf.engine.rendition('item', %( :$addClass, :contents([~] $node.contents>>.&handle($in-level, $pf ) )  ) );
         return '' # explicitly return an empty string because callers expecting a Str
     }
 
     # note no template needed
     multi sub handle (Pod::Raw $node, Int $in-level, PodCache::Processed $pf --> Str ) {
-        $engine.rendition('raw', %( :contents( [~] $node.contents>>.&handle($in-level, $pf ) )  ) )
+        $pf.engine.rendition('raw', %( :contents( [~] $node.contents>>.&handle($in-level, $pf ) )  ) )
     }
 
     multi sub handle (Str $node, Int $in-level, PodCache::Processed $pf, Context $context? = None --> Str ) {
-        $engine.rendition('escaped', %( :contents(~$node) ))
+        $pf.engine.rendition('escaped', %( :contents(~$node) ))
     }
 
     multi sub handle (Str $node, Int $in-level, PodCache::Processed $pf, Context $context where * == HTML --> Str ) {
-        $engine.rendition('raw', %( :contents(~$node) ))
+        $pf.engine.rendition('raw', %( :contents(~$node) ))
     }
 
     multi sub handle (Nil) {
@@ -380,7 +390,7 @@ unit class PodCache::Processed;
                 }
                 $contents = $curl.perform.content;
             }
-            when 'file' | '' { 
+            when 'file' | '' {
                 if ($uri.path).IO ~~ :f {
                     $contents = ($uri.path).IO.slurp;
                 }
@@ -390,12 +400,9 @@ unit class PodCache::Processed;
                 }
             }
         } # Catch will resume here
-        if $contents ~~ m/ '<html>' / {
-            $pf.completion($in-level, 'raw', %( :$contents ))
-        }
-        else {
-            $pf.completion($in-level, 'block-code', %( :$contents ))
-        }
+        my $html = $contents ~~ m/ '<html' (.+) $ /;
+        $contents = ('<html' ~ $/[0]) if $html;
+        $pf.completion($in-level, 'format-p', %( :$contents, :$html ))
     }
 
     =begin takeout

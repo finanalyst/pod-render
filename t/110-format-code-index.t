@@ -2,6 +2,7 @@ use lib 'lib';
 use Test;
 use PodCache::Render;
 use PodCache::Processed;
+use File::Directory::Tree;
 use Data::Dump;
 
 plan 10;
@@ -10,12 +11,14 @@ diag 'Format Code X';
 
 constant REP = 't/tmp/rep';
 constant DOC = 't/tmp/doc';
+constant OUTPUT = 't/tmp/html';
 
+mktree OUTPUT unless OUTPUT.IO ~~ :d;
 my PodCache::Processed $pr;
 
 sub cache_test(Str $fn is copy, Str $to-cache --> PodCache::Processed ) {
     (DOC ~ "/$fn.pod6").IO.spurt: $to-cache;
-    my PodCache::Render $ren .= new(:path( REP ) );
+    my PodCache::Render $ren .= new(:path( REP ), :output( OUTPUT ) );
     $ren.update-cache;
     $ren.processed-instance( :name($fn) );
 }
@@ -44,7 +47,7 @@ my $rv = $pr.pod-body.subst(/\s+/,' ',:g).trim;
 
 #--MARKER-- Test 2
 like $rv, /
-    '<section name="pod">'
+    '<section name="___top">'
     \s* '<p>'
     \s* 'When indexing '
     \s* '<a name="t' .+ '></a>'
