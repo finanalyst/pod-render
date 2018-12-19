@@ -8,7 +8,8 @@
     "provides" : {
         "PodCache::Render" : "lib/PodCache/Render.pm6",
         "PodCache::Engine" : "lib/PodCache/Engine.pm6",
-        "PodCache::Processed" : "lib/PodCache/Processed.pm6"
+        "PodCache::Processed" : "lib/PodCache/Processed.pm6",
+        "Pod::To::HTML2": "lib/PodCache/HTML2.pm6"
     },
     "support" : {
         "source" : "https://github.com/finanalyst/pod-render"

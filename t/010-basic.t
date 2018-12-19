@@ -27,7 +27,9 @@ mktree DOC;
 
 ( DOC ~ '/a-second-pod-file.pod6').IO.spurt(q:to/POD-CONTENT/);
     =begin pod
-    =TITLE More and more
+    =TITLE A Second Pod File
+
+    =SUBTITLE This is subtitled for testing
 
     Some more text
 
@@ -80,8 +82,9 @@ like $pf.pod-body.subst(/\s+/,' ', :g).trim,
 $pf = $renderer.processed-instance(:name<a-second-pod-file>);
 #--MARKER-- Test 9
 like $pf.pod-body, /
-    '<h1 class="title" id="t_1">More and more</h1>'
-    \s* '<p>Some more text</p>'
+    '<h1 class="title" id="t_1">A Second Pod File</h1>'
+    \s* '<div class="subtitle">' \s* '<p>This is subtitled for testing</p>'
+    .+ '<p>Some more text</p>'
     \s* '<h2 id="t_1_1"><a href="#t_1" class="u" title="go to top of document">This is a heading</a></h2>'
     \s* '<p>Some text after a heading</p>'
     /, 'title rendered';

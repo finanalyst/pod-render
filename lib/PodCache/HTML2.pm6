@@ -17,14 +17,11 @@ perl6 lib/Pod/To/Markdown.pm6 > README.md
 
 =end pod
 
-sub MAIN() {
-    print ::('Pod::To::HTML2').render($=pod);
-}
-
 unit class Pod::To::HTML2;
 use PodCache::Processed;
 
-sub render( $pod-tree ) is export {
-    my PodCache::Processed $pp .= new(:$pod-tree);
-    print $pp.rendition('file-wrap')
+method render( $pod-tree ) is export {
+    say "At $?LINE tree is ", $pod-tree.perl;
+    #my PodCache::Processed $p .= new(:name(&?ROUTINE.name), :$pod-tree, :verbose, :!debug);
+    #$p.source-wrap
 }

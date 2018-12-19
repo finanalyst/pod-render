@@ -26,7 +26,7 @@ unit class PodCache::Processed;
     has Bool $!collection-unique;
     has $!file-ext = 'html'; # most likely
     has Bool $!in-defn-list = False;
-    has PodCache::Engine $.engine;
+    has PodCache::Engine $.engine ;
 
     submethod BUILD  (
         :$!name,
@@ -34,7 +34,7 @@ unit class PodCache::Processed;
         :$!pod-tree,
         :$!debug = False,
         :$!verbose = False,
-        :$!engine = PodCached::Engine.new,
+        :$!engine = PodCache::Engine.new,
         :$!collection-unique = False,
         :$!path = '',
         ) { }
@@ -108,7 +108,7 @@ unit class PodCache::Processed;
     }
     method process-pod {
         state $processed =0;
-        say "pod-tree is:" ~ $!pod-tree if $.debug;
+        say "pod-tree is:" ~ $!pod-tree.perl if $.debug;
         print "Processing pod #{++$processed } for $.name " if $!verbose;
         my $time = now;
         $!pod-body = [~] $!pod-tree>>.&handle( 0, self );
@@ -141,26 +141,46 @@ unit class PodCache::Processed;
         $rv ~= $!engine.rendition($key, %params);
     }
 
+    method source-wrap( :$name = $!name --> Str ) {
+        $!engine.rendition('source-wrap', {
+            :$name,
+            :orig-name($!name),
+            :title($!title),
+            :subtitle($!subtitle),
+            :metadata(self.render-meta),
+            :toc( self.render-toc ),
+            :index( self.render-index),
+            :footnotes( self.render-footnotes ),
+            :body( $!pod-body ),
+            :path( $!path )
+        } )
+    }
+
     my enum Context <None Index Heading HTML Raw Output>;
 
     multi sub recurse-until-str(Str:D $s){ $s } # strip out formating code and links
     multi sub recurse-until-str(Pod::Block $n){ $n.contents>>.&recurse-until-str().join }
 
     #| Multi for handling different types of Pod blocks.
-    multi sub handle (Pod::Block::Code $node, Int $in-level, PodCache::Processed $pf  --> Str ) {
+
+    multi sub handle (Pod::Block::Code $node, Int $in-level, PodCache::Processed $pf, Context $context? = None  --> Str )  {
+        note "At $?LINE node is { $node.WHAT.perl }" if $pf.debug;
         my $addClass = $node.config && $node.config<class> ?? ' ' ~ $node.config<class> !! '';
         $pf.completion($in-level, 'block-code', %( :$addClass, :contents( [~] $node.contents>>.&handle($in-level, $pf ) ) ) )
     }
 
-    multi sub handle (Pod::Block::Comment $node, Int $in-level, PodCache::Processed $pf  --> Str ) {
+    multi sub handle (Pod::Block::Comment $node, Int $in-level, PodCache::Processed $pf, Context $context? = None  --> Str )  {
+        note "At $?LINE node is { $node.WHAT.perl }" if $pf.debug;
         $pf.completion($in-level, 'zero', %( :contents([~] $node.contents>>.&handle($in-level, $pf )) ))
     }
 
-    multi sub handle (Pod::Block::Declarator $node, Int $in-level, PodCache::Processed $pf  --> Str ) {
+    multi sub handle (Pod::Block::Declarator $node, Int $in-level, PodCache::Processed $pf, Context $context? = None  --> Str )  {
+        note "At $?LINE node is ", $node.WHAT.perl if $pf.debug;
         $pf.completion($in-level, 'notimplemented', %( :contents([~] $node.contents>>.&handle($in-level, $pf )) ))
     }
 
-    multi sub handle (Pod::Block::Named $node, Int $in-level, PodCache::Processed $pf  --> Str ) {
+    multi sub handle (Pod::Block::Named $node, Int $in-level, PodCache::Processed $pf, Context $context? = None  --> Str )  {
+        note "At $?LINE node is { $node.WHAT.perl } with name { $node.name // 'na' }" if $pf.debug;
         my $target = $pf.register-toc( :1level, :text( $node.name.tclc ) );
         $pf.completion($in-level, 'named', %(
             :name($node.name.tclc),
@@ -171,7 +191,8 @@ unit class PodCache::Processed;
         ))
     }
 
-    multi sub handle (Pod::Block::Named $node where $node.name.lc eq 'pod', Int $in-level, PodCache::Processed $pf  --> Str ) {
+    multi sub handle (Pod::Block::Named $node where $node.name.lc eq 'pod', Int $in-level, PodCache::Processed $pf, Context $context? = None  --> Str )  {
+        note "At $?LINE node is { $node.WHAT.perl } with name { $node.name // 'na' }" if $pf.debug;
         my $name = $pf.top eq TOP ?? TOP !! 'pod' ; # TOP, until TITLE changes it. Will fail if multiple pod without TITLE
         $pf.completion($in-level, 'section', %(
             :$name,
@@ -179,7 +200,8 @@ unit class PodCache::Processed;
         ))
     }
 
-    multi sub handle (Pod::Block::Named $node where $node.name eq 'TITLE', Int $in-level, PodCache::Processed $pf --> Str ) {
+    multi sub handle (Pod::Block::Named $node where $node.name eq 'TITLE', Int $in-level, PodCache::Processed $pf, Context $context? = None --> Str )  {
+        note "At $?LINE node is { $node.WHAT.perl } with name { $node.name // 'na' }" if $pf.debug;
         my $addClass = ($node.config && $node.config<class> ?? ' ' ~ $node.config<class> !! '');
         my $text = $pf.title = $node.contents[0].contents[0].Str;
         $pf.top = $pf.register-toc(:1level, :$text, :is-title );
@@ -187,44 +209,53 @@ unit class PodCache::Processed;
         $pf.completion($in-level, 'title', %( :$addClass, :$target, :$text  ) )
     }
 
-    multi sub handle (Pod::Block::Named $node where $node.name eq 'SUBTITLE', Int $in-level, PodCache::Processed $pf --> Str ) {
+    multi sub handle (Pod::Block::Named $node where $node.name eq 'SUBTITLE', Int $in-level, PodCache::Processed $pf, Context $context? = None --> Str )  {
+        note "At $?LINE node is { $node.WHAT.perl } with name { $node.name // 'na' }" if $pf.debug;
         my $addClass = ($node.config && $node.config<class> ?? ' ' ~ $node.config<class> !! '');
-        my $content = $pf.subtitle = $node.&handle($in-level,$pf, None);
-        $pf.completion($in-level, 'subtitle', %( :$addClass, :$content  ) )
+        my $contents = $pf.subtitle = [~] $node.contents>>.&handle($in-level,$pf, None);
+        $pf.completion($in-level, 'subtitle', %( :$addClass, :$contents  ) )
     }
 
     multi sub handle (Pod::Block::Named $node where $node.name ~~ any(<VERSION DESCRIPTION AUTHOR SUMMARY>),
-        Int $in-level, PodCache::Processed $pf --> Str ) {
+        Int $in-level, PodCache::Processed $pf, Context $context? = None --> Str ) {
+        note "At $?LINE node is { $node.WHAT.perl } with name { $node.name // 'na' }" if $pf.debug;
         $pf.register-meta(:name($node.name.lc), :value($node.contents[0].contents[0].Str));
-        $pf.completion($in-level, 'zero', %( :content(' ')  ) ) # make sure any list is correctly ended.
+        $pf.completion($in-level, 'zero', %( :contents(' ')  ) ) # make sure any list is correctly ended.
     }
 
-    multi sub handle (Pod::Block::Named $node where $node.name eq 'Html' , Int $in-level, PodCache::Processed $pf--> Str ) {
+    multi sub handle (Pod::Block::Named $node where $node.name eq 'Html' , Int $in-level, PodCache::Processed $pf, Context $context? = None --> Str )  {
+        note "At $?LINE node is { $node.WHAT.perl } with name { $node.name // 'na' }" if $pf.debug;
         $pf.completion($in-level, 'raw', %( :contents( [~] $node.contents>>.&handle($in-level, $pf, HTML) )  ) )
     }
 
-    multi sub handle (Pod::Block::Named $node where .name eq 'output', Int $in-level, PodCache::Processed $pf  --> Str ) {
+    multi sub handle (Pod::Block::Named $node where .name eq 'output', Int $in-level, PodCache::Processed $pf, Context $context? = None  --> Str )  {
+        note "At $?LINE node is { $node.WHAT.perl } with name { $node.name // 'na' }" if $pf.debug;
         $pf.completion($in-level, 'output', %( :contents( [~] $node.contents>>.&handle($in-level, $pf, Output) )  ) )
     }
 
-    multi sub handle (Pod::Block::Named $node where .name eq 'Raw', Int $in-level, PodCache::Processed $pf  --> Str ) {
+    multi sub handle (Pod::Block::Named $node where .name eq 'Raw', Int $in-level, PodCache::Processed $pf, Context $context? = None  --> Str )  {
+        note "At $?LINE node is { $node.WHAT.perl } with name { $node.name // 'na' }" if $pf.debug;
         $pf.completion($in-level, 'raw', %( :contents( [~] $node.contents>>.&handle($in-level, $pf, Output) )  ) )
     }
 
-    multi sub handle (Pod::Block::Para $node, Int $in-level, PodCache::Processed $pf, Context $context where * == Output  --> Str ) {
+    multi sub handle (Pod::Block::Para $node, Int $in-level, PodCache::Processed $pf, Context $context where * == Output  --> Str )  {
+        note "At $?LINE node is ", $node.WHAT.perl if $pf.debug;
         $pf.completion($in-level, 'raw', %( :contents( [~] $node.contents».&handle($in-level, $pf ) )  ) )
     }
 
-    multi sub handle (Pod::Block::Para $node, Int $in-level, PodCache::Processed $pf , Context $context? = None --> Str ) {
+    multi sub handle (Pod::Block::Para $node, Int $in-level, PodCache::Processed $pf , Context $context? = None --> Str )  {
+        note "At $?LINE node is ", $node.WHAT.perl if $pf.debug;
         my $addClass = ($node.config && $node.config<class> ?? ' ' ~ $node.config<class> !! '');
         $pf.completion($in-level, 'para', %( :$addClass, :contents( [~] $node.contents>>.&handle($in-level, $pf, $context ) )  ) )
     }
 
-    multi sub handle (Pod::Block::Para $node, Int $in-level, PodCache::Processed $pf, Context $context where * != None  --> Str ) {
+    multi sub handle (Pod::Block::Para $node, Int $in-level, PodCache::Processed $pf, Context $context where * != None  --> Str )  {
+        note "At $?LINE node is ", $node.WHAT.perl if $pf.debug;
         $pf.completion($in-level, 'raw', %( :contents( [~] $node.contents>>.&handle($in-level, $pf, $context) )  ) )
     }
 
-    multi sub handle (Pod::Block::Table $node, Int $in-level, PodCache::Processed $pf  --> Str ) {
+    multi sub handle (Pod::Block::Table $node, Int $in-level, PodCache::Processed $pf  --> Str )  {
+        note "At $?LINE node is ", $node.WHAT.perl if $pf.debug;
         my $addClass = ($node.config && $node.config<class> ?? ' ' ~ $node.config<class> !! '');
         my @headers = gather for $node.headers { take .&handle($in-level, $pf ) };
         $pf.completion($in-level,  'table', %(
@@ -237,12 +268,14 @@ unit class PodCache::Processed;
             ) )
     }
 
-    multi sub handle(Pod::Defn $node, Int $in-level, PodCache::Processed $pf, Context $context = None --> Str ) {
+    multi sub handle (Pod::Defn $node, Int $in-level, PodCache::Processed $pf, Context $context = None --> Str )  {
+        note "At $?LINE node is ", $node.WHAT.perl if $pf.debug;
         my $addClass = ($node.config && $node.config<class> ?? ' ' ~ $node.config<class> !! '');
         $pf.completion($in-level, 'defn', %( :$addClass, :term($node.term), :contents( [~] $node.contents>>.&handle($in-level, $pf, $context ) )  ) )
     }
 
-    multi sub handle (Pod::Heading $node, Int $in-level, PodCache::Processed $pf --> Str ) {
+    multi sub handle (Pod::Heading $node, Int $in-level, PodCache::Processed $pf --> Str )  {
+        note "At $?LINE node is ", $node.WHAT.perl if $pf.debug;
         my $addClass = ($node.config && $node.config<class> ?? ' ' ~ $node.config<class> !! '');
         my $level = $node.level;
         my $target = $pf.register-toc( :$level, :text( recurse-until-str($node).join ) ); # must register toc before processing content!!
@@ -256,7 +289,8 @@ unit class PodCache::Processed;
         })
     }
 
-    multi sub handle (Pod::Item $node, Int $in-level is copy, PodCache::Processed $pf --> Str  ) {
+    multi sub handle (Pod::Item $node, Int $in-level is copy, PodCache::Processed $pf --> Str  )  {
+        note "At $?LINE node is ", $node.WHAT.perl if $pf.debug;
         my $addClass = ($node.config && $node.config<class> ?? ' ' ~ $node.config<class> !! '');
         my $level = $node.level - 1;
         while $level < $in-level {
@@ -272,62 +306,75 @@ unit class PodCache::Processed;
     }
 
     # note no template needed
-    multi sub handle (Pod::Raw $node, Int $in-level, PodCache::Processed $pf --> Str ) {
+    multi sub handle (Pod::Raw $node, Int $in-level, PodCache::Processed $pf --> Str )  {
+        note "At $?LINE node is ", $node.WHAT.perl if $pf.debug;
         $pf.engine.rendition('raw', %( :contents( [~] $node.contents>>.&handle($in-level, $pf ) )  ) )
     }
 
-    multi sub handle (Str $node, Int $in-level, PodCache::Processed $pf, Context $context? = None --> Str ) {
+    multi sub handle (Str $node, Int $in-level, PodCache::Processed $pf, Context $context? = None --> Str )  {
+        note "At $?LINE node is ", $node.WHAT.perl if $pf.debug;
         $pf.engine.rendition('escaped', %( :contents(~$node) ))
     }
 
-    multi sub handle (Str $node, Int $in-level, PodCache::Processed $pf, Context $context where * == HTML --> Str ) {
+    multi sub handle (Str $node, Int $in-level, PodCache::Processed $pf, Context $context where * == HTML --> Str )  {
+        note "At $?LINE node is ", $node.WHAT.perl if $pf.debug;
         $pf.engine.rendition('raw', %( :contents(~$node) ))
     }
 
-    multi sub handle (Nil) {
+    multi sub handle (Nil)  {
         die 'Nil';
     }
 
-    multi sub handle (Pod::Config $node, Int $in-level, PodCache::Processed $pf  --> Str ) {
+    multi sub handle (Pod::Config $node, Int $in-level, PodCache::Processed $pf  --> Str )  {
+        note "At $?LINE node is ", $node.WHAT.perl if $pf.debug;
         $pf.completion($in-level, 'comment',%( :contents($node.type ~ '=' ~ $node.config.perl)  ) )
     }
 
-    multi sub handle (Pod::FormattingCode $node, Int $in-level, PodCache::Processed $pf, Context $context where * == Raw   --> Str ) {
+    multi sub handle (Pod::FormattingCode $node, Int $in-level, PodCache::Processed $pf, Context $context where * == Raw   --> Str )  {
+        note "At $?LINE node is { $node.WHAT.perl } with type { $node.type // 'na' }" if $pf.debug;
         $pf.completion($in-level, 'raw', %( :contents( [~] $node.contents>>.&handle($in-level, $pf, $context) )  ) )
     }
 
-    multi sub handle (Pod::FormattingCode $node where .type ~~ none(<B C E Z I X N L P R T K U V>), Int $in-level, PodCache::Processed $pf, Context $context where * == None   --> Str ) {
+    multi sub handle (Pod::FormattingCode $node where .type ~~ none(<B C E Z I X N L P R T K U V>), Int $in-level, PodCache::Processed $pf, Context $context where * == None   --> Str )  {
+        note "At $?LINE node is { $node.WHAT.perl } with type { $node.type // 'na' }" if $pf.debug;
         $pf.completion($in-level, 'escaped', %( :contents( $node.type ~ '<' ~ [~] $node.contents>>.&handle($in-level, $pf, $context) ~ '>' )  ) )
     }
 
-    multi sub handle (Pod::FormattingCode $node where .type eq 'B', Int $in-level, PodCache::Processed $pf, Context $context = None   --> Str ) {
+    multi sub handle (Pod::FormattingCode $node where .type eq 'B', Int $in-level, PodCache::Processed $pf, Context $context = None   --> Str )  {
+        note "At $?LINE node is { $node.WHAT.perl } with type { $node.type // 'na' }" if $pf.debug;
         my $addClass = $node.config && $node.config<class> ?? $node.config<class> !! '';
         $pf.completion($in-level, 'format-b',%( :$addClass, :contents( [~] $node.contents>>.&handle($in-level, $pf, $context) )  ))
     }
 
-    multi sub handle (Pod::FormattingCode $node where .type eq 'C', Int $in-level, PodCache::Processed $pf, Context $context? = None   --> Str ) {
+    multi sub handle (Pod::FormattingCode $node where .type eq 'C', Int $in-level, PodCache::Processed $pf, Context $context? = None   --> Str )  {
+        note "At $?LINE node is { $node.WHAT.perl } with type { $node.type // 'na' }" if $pf.debug;
         my $addClass = ($node.config && $node.config<class> ?? ' ' ~ $node.config<class> !! '');
         $pf.completion($in-level, 'format-c', %( :$addClass, :contents([~] $node.contents>>.&handle($in-level, $pf, $context ) )  ) )
     }
 
-    multi sub handle (Pod::FormattingCode $node where .type eq 'C', Int $in-level, PodCache::Processed $pf, Context $context where * ~~ Index   --> Str ) {
+    multi sub handle (Pod::FormattingCode $node where .type eq 'C', Int $in-level, PodCache::Processed $pf, Context $context where * ~~ Index   --> Str )  {
+        note "At $?LINE node is { $node.WHAT.perl } with type { $node.type // 'na' }" if $pf.debug;
         $pf.completion($in-level, 'format-c-index', %( :contents( [~] $node.contents>>.&handle($in-level, $pf ) ) ))
     }
 
-    multi sub handle (Pod::FormattingCode $node where .type eq 'E', Int $in-level, PodCache::Processed $pf, Context $context? = None   --> Str ) {
+    multi sub handle (Pod::FormattingCode $node where .type eq 'E', Int $in-level, PodCache::Processed $pf, Context $context? = None   --> Str )  {
+        note "At $?LINE node is { $node.WHAT.perl } with type { $node.type // 'na' }" if $pf.debug;
         $pf.completion($in-level, 'raw', %( :contents( [~] $node.meta.map({ when Int { "&#$_;" }; when Str { "&$_;" }; $_ }) )  ) )
     }
 
-    multi sub handle (Pod::FormattingCode $node where .type eq 'Z', Int $in-level, PodCache::Processed $pf, $context = None   --> Str ) {
+    multi sub handle (Pod::FormattingCode $node where .type eq 'Z', Int $in-level, PodCache::Processed $pf, $context = None   --> Str )  {
+        note "At $?LINE node is { $node.WHAT.perl } with type { $node.type // 'na' }" if $pf.debug;
         $pf.completion($in-level, 'zero',%( :contents([~] $node.contents>>.&handle($in-level, $pf, $context))  ) )
     }
 
-    multi sub handle (Pod::FormattingCode $node where .type eq 'I', Int $in-level, PodCache::Processed $pf, Context $context = None   --> Str ) {
+    multi sub handle (Pod::FormattingCode $node where .type eq 'I', Int $in-level, PodCache::Processed $pf, Context $context = None   --> Str )  {
+        note "At $?LINE node is { $node.WHAT.perl } with type { $node.type // 'na' }" if $pf.debug;
         my $addClass = $node.config && $node.config<class> ?? $node.config<class> !! '';
         $pf.completion($in-level, 'format-i',%( :$addClass, :contents( [~] $node.contents>>.&handle($in-level, $pf, $context) )  ))
     }
 
-    multi sub handle (Pod::FormattingCode $node where .type eq 'X', Int $in-level, PodCache::Processed $pf, Context $context = None   --> Str ) {
+    multi sub handle (Pod::FormattingCode $node where .type eq 'X', Int $in-level, PodCache::Processed $pf, Context $context = None   --> Str )  {
+        note "At $?LINE node is { $node.WHAT.perl } with type { $node.type // 'na' }" if $pf.debug;
         my $addClass = $node.config && $node.config<class> ?? $node.config<class> !! '';
         my Bool $header = $context ~~ Heading;
         my $text = [~] $node.contents>>.&handle($in-level, $pf, $context);
@@ -336,47 +383,55 @@ unit class PodCache::Processed;
         $pf.completion($in-level, 'format-x',%( :$addClass, :$text, :$target,  :$header  ) )
     }
 
-    multi sub handle (Pod::FormattingCode $node where .type eq 'N', Int $in-level, PodCache::Processed $pf, Context $context = None --> Str ) {
+    multi sub handle (Pod::FormattingCode $node where .type eq 'N', Int $in-level, PodCache::Processed $pf, Context $context = None --> Str )  {
+        note "At $?LINE node is { $node.WHAT.perl } with type { $node.type // 'na' }" if $pf.debug;
         my $text = [~] $node.contents>>.&handle($in-level, $pf,$context);
         $pf.completion($in-level, 'format-n', $pf.register-footnote(:$text) )
     }
 
-    multi sub handle (Pod::FormattingCode $node where .type eq 'L', Int $in-level, PodCache::Processed $pf, Context $context = None   --> Str ) {
+    multi sub handle (Pod::FormattingCode $node where .type eq 'L', Int $in-level, PodCache::Processed $pf, Context $context = None   --> Str )  {
+        note "At $?LINE node is { $node.WHAT.perl } with type { $node.type // 'na' }" if $pf.debug;
         my $addClass = ($node.config && $node.config<class> ?? ' ' ~ $node.config<class> !! '');
-        my $content = [~] $node.contents>>.&handle($in-level, $pf, $context);
-        my $target = $node.meta eqv [] | [""] ?? $content !! $node.meta[0];
+        my $contents = [~] $node.contents>>.&handle($in-level, $pf, $context);
+        my $target = $node.meta eqv [] | [""] ?? $contents !! $node.meta[0];
         $target = $pf.register-link( recurse-until-str($node).join, $target );
         # link handling needed here to deal with local links in global-link context
         $pf.completion($in-level, 'format-l', %( :$target, :$addClass, :contents([~] $node.contents>>.&handle($in-level, $pf, $context ) )  ) )
     }
 
-    multi sub handle (Pod::FormattingCode $node where .type eq 'R', Int $in-level, PodCache::Processed $pf, Context $context = None   --> Str ) {
+    multi sub handle (Pod::FormattingCode $node where .type eq 'R', Int $in-level, PodCache::Processed $pf, Context $context = None   --> Str )  {
+        note "At $?LINE node is { $node.WHAT.perl } with type { $node.type // 'na' }" if $pf.debug;
         my $addClass = ($node.config && $node.config<class> ?? ' ' ~ $node.config<class> !! '');
         $pf.completion($in-level, 'format-r', %( :$addClass, :contents([~] $node.contents>>.&handle($in-level, $pf, $context ) )  ) )
     }
 
-    multi sub handle (Pod::FormattingCode $node where .type eq 'T', Int $in-level, PodCache::Processed $pf, Context $context = None   --> Str ) {
+    multi sub handle (Pod::FormattingCode $node where .type eq 'T', Int $in-level, PodCache::Processed $pf, Context $context = None   --> Str )  {
+        note "At $?LINE node is { $node.WHAT.perl } with type { $node.type // 'na' }" if $pf.debug;
         my $addClass = ($node.config && $node.config<class> ?? ' ' ~ $node.config<class> !! '');
         $pf.completion($in-level, 'format-t', %( :$addClass, :contents([~] $node.contents>>.&handle($in-level, $pf, $context ) )  ) )
     }
 
-    multi sub handle (Pod::FormattingCode $node where .type eq 'K', Int $in-level, PodCache::Processed $pf, Context $context? = None   --> Str ) {
+    multi sub handle (Pod::FormattingCode $node where .type eq 'K', Int $in-level, PodCache::Processed $pf, Context $context? = None   --> Str )  {
+        note "At $?LINE node is { $node.WHAT.perl } with type { $node.type // 'na' }" if $pf.debug;
         my $addClass = ($node.config && $node.config<class> ?? ' ' ~ $node.config<class> !! '');
         $pf.completion($in-level, 'format-k', %( :$addClass, :contents([~] $node.contents>>.&handle($in-level, $pf, $context ) )  ) )
     }
 
-    multi sub handle (Pod::FormattingCode $node where .type eq 'U', Int $in-level, PodCache::Processed $pf, Context $context = None   --> Str ) {
+    multi sub handle (Pod::FormattingCode $node where .type eq 'U', Int $in-level, PodCache::Processed $pf, Context $context = None   --> Str )  {
+        note "At $?LINE node is { $node.WHAT.perl } with type { $node.type // 'na' }" if $pf.debug;
         my $addClass = ($node.config && $node.config<class> ?? ' ' ~ $node.config<class> !! '');
         $pf.completion($in-level, 'format-u', %( :$addClass, :contents([~] $node.contents>>.&handle($in-level, $pf, $context ) )  ) )
     }
 
-    multi sub handle (Pod::FormattingCode $node where .type eq 'V', Int $in-level, PodCache::Processed $pf, Context $context = None  --> Str ) {
+    multi sub handle (Pod::FormattingCode $node where .type eq 'V', Int $in-level, PodCache::Processed $pf, Context $context = None  --> Str )  {
+        note "At $?LINE node is { $node.WHAT.perl } with type { $node.type // 'na' }" if $pf.debug;
         $pf.completion($in-level, 'escaped', %( :contents([~] $node.contents>>.&handle($in-level, $pf, $context ) )  ) )
     }
 
-    multi sub handle (Pod::FormattingCode $node where .type eq 'P', Int $in-level, PodCache::Processed $pf, Context $context = None  --> Str ) {
-        my $content = $node.contents>>.&handle($in-level, $pf, $context);
-        my $link = ($node.meta eqv [] | [""] ?? $content !! $node.meta).Str;
+    multi sub handle (Pod::FormattingCode $node where .type eq 'P', Int $in-level, PodCache::Processed $pf, Context $context = None  --> Str )  {
+        note "At $?LINE node is { $node.WHAT.perl } with type { $node.type // 'na' }" if $pf.debug;
+        my Str $link-contents = [~] $node.contents>>.&handle($in-level, $pf, $context);
+        my $link = ($node.meta eqv [] | [""] ?? $link-contents !! $node.meta).Str;
         my URI $uri .= new($link);
         my Str $contents;
         given $uri.scheme {

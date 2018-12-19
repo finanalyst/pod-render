@@ -227,7 +227,7 @@ sub tmpl-data {
     'section' => '<section name="{{ name }}">{{{ contents }}}
     </section>',
 
-    'subtitle' => '<p class="subtitle{{# addClass }} {{ addClass }}{{/ addClass }}">{{{ contents }}}</p>',
+    'subtitle' => '<div class="subtitle{{# addClass }} {{ addClass }}{{/ addClass }}">{{{ contents }}}</div>',
 
     'table' => '<table class="pod-table{{# addClass }} {{ addClass }}{{/ addClass }}">
         {{# caption }}<caption>{{{ caption }}}</caption>{{/ caption }}
