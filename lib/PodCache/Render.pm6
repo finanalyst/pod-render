@@ -239,6 +239,7 @@ use PodCache::Processed;
 use YAMLish;
 use File::Directory::Tree;
 use LibCurl::Easy;
+use URI;
 
 unit class PodCache::Render is Pod::To::Cached;
 
@@ -427,13 +428,18 @@ method links-test {
             # Any legitimate local target will be in the global-targets Set
             # So link is external untested or mal-formed internal
             $err = self.test-link( $link );
+            if $err {
+                # look to see if this is a possible local link
+                my URI $uri .= new($link);
+                $err ~= "\n\t\tIs there an error in a local target?" if $uri.scheme ne any(<http https>);
+            }
             @!link-responses.append( $err
                 ?? "Error: $inf\n\t$err"
                 !! "OK: $inf with target ｢$link｣"
             )
         }
         @!link-responses.append( "OK: local target ｢$link｣ $inf")
-            if ! $!links-tested{ $link } and $gtargets{ $link }
+            if ! $!links-tested{ $link } and $gtargets{ $link } # not in tested set because gtargets test shortcircuits in unless
     }
     note "Link responses are:\n", @!link-responses.join("\n") if +@!link-responses and $!verbose ;
 }

@@ -454,6 +454,9 @@ unit class PodCache::Processed;
                     note $contents if $pf.verbose;
                 }
             }
+            default {
+                $contents = "Scheme ｢$_｣ is not implemented for P<$link-contents>"
+            }
         } # Catch will resume here
         my $html = $contents ~~ m/ '<html' (.+) $ /;
         $contents = ('<html' ~ $/[0]) if $html;
