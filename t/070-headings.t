@@ -51,6 +51,6 @@ $pr = cache_test(++$fn, q:to/PODEND/);
 my $html = $pr.pod-body.subst(/\s+/,' ',:g).trim;
 
 #--MARKER-- Test 1
-like $html, /'h2 id="t_2_2"' .+ '>Heading 2.2'/, 'Heading 2.2 has expected id';
+like $html, /'h2 id="heading_2.2"' .+ '>Heading 2.2'/, 'Heading 2.2 has expected id';
 #--MARKER-- Test 2
 like $html, /'class="index-entry">Heading' .+ '2.2.2</a>' / , 'Heading 2.2.2 is indexed';

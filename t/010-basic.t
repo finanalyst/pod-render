@@ -73,7 +73,7 @@ $renderer.debug = False;
 like $pf.pod-body.subst(/\s+/,' ', :g).trim,
     /
     '<section name="___top">'
-    \s* '<h1 class="title" id="t_1">This is a title</h1>'  # the first header id
+    \s* '<h1 class="title" id="this_is_a_title">This is a title</h1>'  # the first header id
     \s* '<p>Some text</p>'
     \s* '</section>'
     /,
@@ -82,10 +82,10 @@ like $pf.pod-body.subst(/\s+/,' ', :g).trim,
 $pf = $renderer.processed-instance(:name<a-second-pod-file>);
 #--MARKER-- Test 9
 like $pf.pod-body, /
-    '<h1 class="title" id="t_1">A Second Pod File</h1>'
+    '<h1 class="title" id="a_second_pod_file">A Second Pod File</h1>'
     \s* '<div class="subtitle">' \s* '<p>This is subtitled for testing</p>'
     .+ '<p>Some more text</p>'
-    \s* '<h2 id="t_1_1"><a href="#t_1" class="u" title="go to top of document">This is a heading</a></h2>'
+    \s* '<h2 id="this_is_a_heading"><a href="#a_second_pod_file" class="u" title="go to top of document">This is a heading</a></h2>'
     \s* '<p>Some text after a heading</p>'
     /, 'title rendered';
 #--MARKER-- Test 10
@@ -97,7 +97,7 @@ like $pf.render-toc.subst(/\s+/,' ', :g).trim,
     \s* '<h2 id="TOC_Title">Table of Contents</h2></caption>'
     \s* '<tr class="toc-level-2">'
     \s* '<td class="toc-text">'
-    \s* '<a href="#t_1_1">This is a heading</a>'
+    \s* '<a href="#this_is_a_heading">This is a heading</a>'
     \s* '</td>'
     \s* '</tr>'
     \s* '</table>'

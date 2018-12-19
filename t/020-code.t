@@ -61,7 +61,7 @@ like $pr.pod-body.subst(/\s+/,' ',:g).trim, /
     '<p>' \s* 'This is an ordinary paragraph' \s* '</p>'
     \s* '<pre class="pod-block-code">While this is not'
     \s* 'This is a code block</pre>'
-    \s* '<h1 id="t_1">'
+    \s* '<h1 id="mumble:_&quot;mumble&quot;">'
     \s* '<a' \s* [ 'class="u"' \s* | 'href="#___top"' \s* | 'title="go to top of document"' \s* ]**3 '>'
     \s* 'Mumble: &quot;mumble&quot;'
     \s* '</a>'

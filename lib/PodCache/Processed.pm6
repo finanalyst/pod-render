@@ -1,7 +1,7 @@
 use v6.c;
 use PodCache::Engine;
 constant TOP = '___top'; # the name of the anchor at the top of a source file
-constant MAX-LINK-CHARS = 40; # the maximum number of chars in a link
+constant FRONT-MATTER = 'Introduction'; # Text between =TITLE and first header
 use URI;
 use LibCurl::Easy;
 
@@ -40,15 +40,16 @@ unit class PodCache::Processed;
         ) { }
 
     submethod TWEAK {
-        $!top = self.unique-target( TOP );
+        $!top = self.rewrite-target( TOP , :unique);
         self.process-pod;
     }
 
     method register-toc(:$level!, :$text!, Bool :$is-title = False --> Str) {
         @!counters[$level - 1]++;
         @!counters.splice($level);
-        my $target = self.unique-target('t_' ~ @!counters>>.Str.join: '_') ;
-        @!toc.push: %( :$level, :$text, :$target, :$is-title );
+        my $counter = @!counters>>.Str.join: '_';
+        my $target = self.rewrite-target($text, :!unique ) ;
+        @!toc.push: %( :$level, :$text, :$target, :$is-title, :$counter );
         $target
     }
     method render-toc( --> Str ) {
@@ -63,9 +64,9 @@ unit class PodCache::Processed;
         else {
             # there must be something in either text or entries[0] to get here
             $target = +@entries ?? @entries.join('-') !! $text;
-            $target = self.unique-target("t_$target")
+            $target = self.rewrite-target($target, :unique)
         }
-        my $place = +@.toc ?? @.toc[ * - 1]<text> !! 'Introduction';
+        my $place = +@.toc ?? @.toc[ * - 1]<text> !! FRONT-MATTER;
         if +@entries {
             for @entries {
                 %.index{ .[0] } = Array unless %.index{ .[0] }:exists;
@@ -83,15 +84,16 @@ unit class PodCache::Processed;
         return '' unless +%!index.keys; #No render without any keys
         $!engine.rendition( 'index', %( :index([gather for %!index.sort {  take %(:text(.key), :refs( [.value.sort] )) } ])  )  )
     }
-    method register-link(Str $entry, Str $target --> Str) {
+    method register-link(Str $entry, Str $target is copy --> Str) {
         my $content= $entry ?? $entry !! $target;
+        $target = self.rewrite-target($target, :!unique);
         @!links.push: %( :$content, :$target);
         $target
     }
     method register-footnote(:$text! --> Hash ) {
         my $fnNumber = +@!footnotes + 1;
-        my $fnTarget = self.unique-target("fn$fnNumber") ;
-        my $retTarget = self.unique-target("fnret$fnNumber");
+        my $fnTarget = self.rewrite-target("fn$fnNumber",:unique) ;
+        my $retTarget = self.rewrite-target("fnret$fnNumber",:unique);
         @!footnotes.push: %( :$text, :$retTarget, :$fnNumber, :$fnTarget  );
         (:$fnTarget, :$fnNumber, :$retTarget).hash
     }
@@ -115,12 +117,16 @@ unit class PodCache::Processed;
         say " in " ~ DateTime.new(now - $time ).second.fmt("%.2f") ~ "s" if $!verbose;
     }
 
-    method unique-target(Str $candidate-name is copy --> Str ) {
-        $candidate-name = $candidate-name.subst(/\s+\.*|\./,'_',:g).subst(/<-alnum>/,'',:g).substr(0, MAX-LINK-CHARS );
+    method rewrite-target(Str $candidate-name is copy, :$unique --> Str ) {
+        # when indexing a unique target is needed even when same entry is repeated
+        # when a Heading is a target, the reference must come from the name
+        $candidate-name = $candidate-name.lc.subst(/\s+/,'_',:g);
         $candidate-name = ($!collection-unique ?? $!name.subst([\/], '_') !! '') ~ $candidate-name;
-        $candidate-name ~= '_0' if $candidate-name (<) $!targets;
-        ++$candidate-name while $!targets{$candidate-name};
-        $!targets{ $candidate-name }++; # now add to targets
+        if $unique {
+            $candidate-name ~= '_0' if $candidate-name (<) $!targets;
+            ++$candidate-name while $!targets{$candidate-name}; # will continue to loop until a unique name is found
+        }
+        $!targets{ $candidate-name }++; # now add to targets, no effect if not unique
         $candidate-name
     }
 

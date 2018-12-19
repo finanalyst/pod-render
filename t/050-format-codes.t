@@ -267,7 +267,7 @@ $pr = cache_test(++$fn, q:to/PODEND/);
 
     This L<link should fail|https://xxxxxioioioi.com> with a bad response code.
 
-    We can L<link to an index test code|format-code-index-test-pod-file_2#t_an_item> with more text.
+    We can L<link to an index test code|format-code-index-test-pod-file_2#an item> with more text.
 
     =end pod
     PODEND
@@ -280,7 +280,7 @@ like $rv, /
     \s* 'We can'
     \s* '<a href="https://docs.perl6.org">Link to a place</a>'
     \s* 'with no problem.'
-    .+ '<a href="format-code-index-test-pod-file_2#t_an_item">' \s* 'link to an index test code'
+    .+ '<a href="format-code-index-test-pod-file_2#an_item">' \s* 'link to an index test code'
     /, 'L format';
 
 $pr = cache_test(++$fn, q:to/PODEND/);

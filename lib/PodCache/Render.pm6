@@ -468,7 +468,7 @@ method update-collection {
         with $!assets {
             for $!assets.IO.dir {
                 mktree .dirname unless .dirname.IO ~~ :d;
-                .copy: "$!output/assets/"
+                .copy: "$!output/assets/$_"
             }
         }
         else {
