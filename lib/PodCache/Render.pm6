@@ -77,7 +77,16 @@ zef install PodCache::Module
 
 =item :assets
 =item2 path to a directory which may have subdirectories, eg.  C<js>, C<css>, C<images>
-=item2 the subdirectories/files are copied to the C<output> directory
+=begin item2
+the subdirectories/files are copied to the C<output> directory, so that C<assets/js/file.js> is copied to
+C<html/assets/js/file.js> assuming that C<output> = C<html>.
+=end item2
+
+=begin item2
+An exception is the C<B<asset>/root> subdirectory. All items in C<root> are copied to the C<output> directory.
+For example, if C<PodCache::Render $renderer .=new(:assets<assets>, :output<html>)> and C<$?CWD/assets/root/favicon.ico>,
+then after rendering C<$?CWD/html/> will contain C<favicon.ico>
+=end item2
 
 =item :config
 =item2  path to a directory containing configuration files (see below)
@@ -103,9 +112,10 @@ zef install PodCache::Module
 =item2 Returns an array of strings containing information
 =item2 no adverbs:  all link responses, all cache statuses, all files when rendered.
 =item2 :errors (default = False):  Failed link responses, files with cache status Valid, Failed, Old; no rendering info
-=item2 :links  (default = True): Supply link responses, hence C<:!links> suppresses link reponses.
-=item2 :cache (default = True): ditto for cache reponses.
-=item2 :rendered (default = True): timestamp rendered by source-name
+=item2 :links-only  (default = False): Supply link responses only.
+=item2 :cache-only (default = False): ditto for cache reponses.
+=item2 :just-rendered (default = False): the sources added by the most recent call to update-collection
+=item2 :when-rendered (default = True ):  source and time rendered
 
 =head1 Usage
 
@@ -239,7 +249,6 @@ use PodCache::Processed;
 use YAMLish;
 use File::Directory::Tree;
 use LibCurl::Easy;
-use URI;
 
 unit class PodCache::Render is Pod::To::Cached;
 
@@ -254,8 +263,9 @@ has $!rendering;
 has $!output;
 
 has @!names; # ordered array of hash of names in cache, with directory paths
-has %.global-index;
-has @.global-links;
+has @!sources-added; # list of files that were added by update for reporting
+has %.global-index; # all items that can be targeted
+has %.global-links; # all links by source of link
 has SetHash $!links-tested .= new; # to avoid testing same external link twice
 has @!link-responses; # keep responses for report method
 has %.rendering-db; # rendering data base
@@ -346,28 +356,33 @@ method processed-instance( :$name ) {
     )
 }
 
-method process-cache( @names = $.list-files(<Current Valid>)  ) { # ignore Failed & Old
+method process-cache( @names = $.list-files(<Current Valid>) --> Int ) { # ignore Failed & Old
     note "{+@names} sources for processing" if $!verbose;
+    # if no change in source and all rendered, then no names,
+    # so no processing will occur, and no need to rewrite db or config files
+    return 0 unless ( $!cache-processed = so(+@names));
     self.process-name($_) for @names;
     note 'writing rendering db' if $!verbose;
-    self.write-rendering-db;
+    self.write-rendering-db; # no need to re-write if no changed
     note 'writing configuration files' if $!verbose;
     self.write-config-files;
     note 'testing links in processed files' if $!verbose;
     self.links-test;
     note 'cache processed' if $!verbose;
-    $!cache-processed = True
+    $!cache-processed = True;
+    +@names
 }
 
 method process-name( Str:D $source-name ) {
     my $pf = self.processed-instance( :name($source-name) );
+    @!sources-added.push: $source-name;
     # add data needed for index files
     %!rendering-db{ $source-name }<title subtitle toc link> = $pf.title, $pf.subtitle, $pf.toc, $source-name;
+    # remove index / link data from stored values, and replace with new data, if it exists
+    %.global-index{$source-name}:delete;
     %.global-index{$source-name} = $pf.index if +$pf.index.keys;
-    # Only need to test links related to files that are processed
-    for $pf.links.list { # registered links out
-        @!global-links.push: %(|$_, :source($source-name))
-    }
+    %.global-links{$source-name}:delete;
+    %.global-links{$source-name} = $pf.links if +$pf.links;
     self.source-wrap($pf);
     %!rendering-db{$source-name}<rendered> = now;
 }
@@ -379,7 +394,7 @@ method write-rendering-db {
     # stored in file under key $!rendering (to allow for multiple renderings)
     my %rdb;
     %rdb = from-json( ($!config ~ '/' ~ RENDERING-DB).IO.slurp ) if ($!config ~ '/' ~ RENDERING-DB).IO ~~ :f;
-    %rdb{$!rendering}<files global-index> = %!rendering-db, %!global-index;
+    %rdb{$!rendering}<files global-index global-links> = %!rendering-db, %!global-index, %!global-links;
     # do it this way to preserve other rendering data
     ($!config ~ '/' ~ RENDERING-DB).IO.spurt: to-json( %rdb )
 }
@@ -389,7 +404,7 @@ method load-rendering-db {
     try {
         CATCH {
             default {
-                die 'Failure building Render object with ' ~ .payload
+                die 'Failure building Render object with ' ~ .message
             }
         }
         if $db ~~ :f {
@@ -397,10 +412,12 @@ method load-rendering-db {
             %!rendering-db = %inp{$!rendering}<files>;
             .value<rendered> = DateTime.new( .value<rendered> ).Instant for %!rendering-db;
             %!global-index = %inp{$!rendering}<global-index>;
+            %!global-links = %inp{$!rendering}<global-links>;
         }
         else {
             %!rendering-db = %();
             %!global-index = %();
+            %!global-links = %();
         }
     }
 }
@@ -410,7 +427,7 @@ method templates-changed {
 }
 
 method links-test {
-    # only test the links in newly processed files
+    # have to test all links, since there may be links into an updated source
     @!link-responses = ();
     $!links-tested = Nil;
     # generate a set of targets from the global-index in the form source#target
@@ -420,18 +437,20 @@ method links-test {
             for @dp { take "$fn#{ .<target> }" }
         }
     };
-    for @.global-links.list -> %info {
+    # links are stored as
+    # {source[{source,lable,target}]}
+    my @glinks .= append( |$_ ) for %!global-links.values;
+    for @glinks.list -> %info {
         my Str $err;
-        my $inf = "link with label ｢{%info<content> }｣ in source ｢{ %info<source> }｣ ";
+        my $inf = "link with lable ｢{%info<lable> }｣ in source ｢{ %info<source> }｣ ";
         my $link = ~%info<target>;
+        note "Testing ｢$link｣ $inf" if $!verbose;
         unless $gtargets{ $link } or $!links-tested{ $link }++ { #first time encountered links-tested{} 0 so false, duplicates >0
             # Any legitimate local target will be in the global-targets Set
             # So link is external untested or mal-formed internal
             $err = self.test-link( $link );
-            if $err {
-                # look to see if this is a possible local link
-                my URI $uri .= new($link);
-                $err ~= "\n\t\tIs there an error in a local target?" if $uri.scheme ne any(<http https>);
+            if so($err) and not( $link ~~ m/ ^ [ 'https' | 'http' ] /) {
+                $err ~= "\n\t\tIs there an error in a local target?";
             }
             @!link-responses.append( $err
                 ?? "Error: $inf\n\t$err"
@@ -466,9 +485,21 @@ method update-collection {
     unless "{$!output}/assets".IO ~~ :d {
         mktree("$!output/assets") or die "Cannot create output directory at ｢{$!output}/assets｣";
         with $!assets {
-            for $!assets.IO.dir {
-                mktree .dirname unless .dirname.IO ~~ :d;
-                .copy: "$!output/assets/$_"
+            my $pref = $!assets.chars;
+            my @assets = my sub recurse ($dir) {
+                    gather for dir($dir) {
+                        take .Str.substr($pref) if .f;
+                        take slip sort recurse $_ if .d;
+                    }
+                }($!assets); # is the first definition of $dir
+            for @assets {
+                if   m/ ^ '/root/' / {
+                    "$!assets$_".IO.copy("$!output/{ .IO.basename }")
+                }
+                else {
+                    mktree( "$!output/assets/{.IO.dirname}" ) unless "$!output/assets/{.IO.dirname}".IO.d;
+                    "$!assets$_".IO.copy("$!output/assets$_")
+                }
             }
         }
         else {
@@ -521,10 +552,10 @@ method test-config-files( :$quiet  = False  ) {
     my @errors = ();
     for @index-files -> $fn {
         next if ~$fn ~~ /'missing-sources'/; # will regenerate missing...
-        my %single-index = load-yaml( $fn.slurp );
+        my %single-index = load-yaml( $fn.IO.slurp );
         CATCH {
             default {
-                @errors.push: "With ｢{ $fn.basename }｣: { .payload }"
+                @errors.push: "With ｢{ $fn.basename }｣: { .message }"
             }
         } # leaves for block if error found
         next if %single-index<source>:exists; # A custom index file is desired, so ignore it.
@@ -611,7 +642,7 @@ method write-config-files {
 }
 
 method process-config( $fn ) {
-    my %index = load-yaml( $fn.slurp );
+    my %index = load-yaml( $fn.IO.slurp );
     if %index<source>:exists {
         "$!config/{%index<source>}".IO.copy: "$!output/{%index<source>}" # extension should be provided
             if "$!config/{%index<source>}".IO ~~ :f;
@@ -704,14 +735,20 @@ method source-params( %info ) {
     }
 }
 
-method report( Bool :$errors = False, Bool :$links = True, Bool :$cache = True, Bool :$rendered = True ) {
+method report( Bool :$errors = False, Bool :$links-only = False, Bool :$cache-only = False, Bool :$just-rendered = False, Bool :$when-rendered = False ) {
     my @rv;
-    @rv = @!link-responses.grep({ ! $errors or m/ ^ 'Error' /  }) if $links;
-    @rv = @.error-messages if $cache;
-    @rv.append( $.hash-files.fmt ) if ! $errors and $cache;
-    @rv.append( $.hash-files(<Old Failed Valid>).fmt ) if $errors and $cache;
-    @rv.append( %.rendering-db.map({ .key ~ "\trendered on " ~ .value<rendered>.DateTime.truncated-to('second') }).sort )
-        if $rendered and ! $errors;
+    @rv = @!link-responses.grep({ ! $errors or m/ ^ 'Error' /  })
+        unless $cache-only or $just-rendered or $when-rendered;
+    @rv = @.error-messages
+        unless $links-only or $just-rendered or $when-rendered;
+    @rv.append( $.hash-files.fmt )
+        unless $errors or $links-only or $just-rendered or $when-rendered;
+    @rv.append( $.hash-files(<Old Failed Valid>).fmt )
+        unless ! $errors or $links-only or $just-rendered or $when-rendered;
+    @rv.append( @!sources-added.sort )
+        unless ! $just-rendered or $errors or $cache-only or $links-only;
+    @rv.append( %!rendering-db.map({ "{ .key }\twas rendered on { .value<rendered>.DateTime.truncated-to('seconds') }" }))
+        unless ! $when-rendered or $errors or $cache-only or $links-only;
     @rv
 }
 

@@ -6,20 +6,21 @@ use File::Directory::Tree;
 use PodCache::Render;
 use PodCache::Processed;
 
-plan 13;
+plan 17;
 # Assumes the presence in cache of files defined in 140*
 
 constant REP = 't/tmp/rep';
 constant DOC = 't/tmp/doc';
 constant OUTPUT = 't/tmp/html';
 constant CONFIG = 't/tmp/config';
+constant ASSETS = 't/tmp/assets';
 
-for OUTPUT, CONFIG {
+for OUTPUT, CONFIG, ASSETS~"/js", ASSETS~"/root" {
     .&rmtree;
     .&mktree
 }
 
-my PodCache::Render $renderer .= new(:path(REP), :output( OUTPUT ), :config( CONFIG ) );
+my PodCache::Render $renderer .= new(:path(REP), :output( OUTPUT ), :config( CONFIG ), :assets( ASSETS ) );
 my PodCache::Processed $pf;
 my $rv;
 
@@ -45,6 +46,7 @@ like $rv, /
 
 $renderer.generate-config-files;
 
+# set up special files
 (CONFIG ~ '/home-page.yaml').IO.spurt: q:to/HOMEPAGE/;
     source: myownhomepage.html
     HOMEPAGE
@@ -58,20 +60,29 @@ $renderer.generate-config-files;
         </body>
     </html>
     HOMEPAGE
+(ASSETS ~ '/js/something.js').IO.spurt: q:to/JS/;
+    function useless(){};
+    JS
+(ASSETS ~'/root/favicon-proto.dmy').IO.spurt: q:to/ROOT/;
+    An image files here
+    ROOT
 
 #--MARKER-- Test 5
 lives-ok { $renderer.create-collection }, 'writing whole collection';
-
 #--MARKER-- Test 6
-is (OUTPUT ~ '/index.html').IO.f, True, 'main index file generated';
+ok (OUTPUT ~ '/assets/js/something.js').IO ~~ :f, 'transferred asset file';
 #--MARKER-- Test 7
+ok (OUTPUT ~ '/favicon-proto.dmy').IO ~~ :f, 'transferred asset to output root';
+#--MARKER-- Test 8
+is (OUTPUT ~ '/index.html').IO.f, True, 'main index file generated';
+#--MARKER-- Test 9
 is (OUTPUT ~ '/global-index.html').IO.f, True, 'indexation file generated';
 
-#--MARKER-- Test 8
+#--MARKER-- Test 10
 is (OUTPUT ~ '/myownhomepage.html').IO.f, True, 'custom file generated';
 
-#--MARKER-- Test 9
-is +$renderer.report(:errors,:!cache,:!rendered ), 2, 'Two external links have errors';
+#--MARKER-- Test 11
+is +$renderer.report(:errors,:links-only ), 2, 'Two external links have errors';
 
 my $mod-time = ( OUTPUT ~ '/a-second-pod-file.html').IO.modified;
 
@@ -93,11 +104,17 @@ my $mod-time = ( OUTPUT ~ '/a-second-pod-file.html').IO.modified;
 $renderer .= new(:path(REP), :output( OUTPUT ), :config( CONFIG ) );
 # renews the collection
 $renderer.update-collection;
-#--MARKER-- Test 10
-ok $mod-time < ( OUTPUT ~ '/a-second-pod-file.html').IO.modified, 'tainted source has led to new html file';
-#--MARKER-- Test 11
-ok +$renderer.report(:errors, :!links, :!rendered ), 'no cache errors to report';
 #--MARKER-- Test 12
-is +$renderer.report(:!cache,:!rendered), 1, 'a new link has been processed';
+ok $mod-time < ( OUTPUT ~ '/a-second-pod-file.html').IO.modified, 'tainted source has led to new html file';
 #--MARKER-- Test 13
-is +$renderer.report(:!links, :!cache), +$renderer.hash-files.keys, 'all sources should be rendered';
+ok +$renderer.report(:errors, :cache-only ), 'no cache errors to report';
+my @rv = $renderer.report(:errors,:links-only);
+#--MARKER-- Test 14
+is +@rv, 3, 'another error as the new link has no local target';
+#--MARKER-- Test 15
+like @rv.join, /'Is there an error in a local target'/,'local target hint';
+@rv=$renderer.report(:links-only);
+#--MARKER-- Test 16
+is +@rv, 6, 'a new link has been processed';
+#--MARKER-- Test 17
+is +$renderer.report(:when-rendered), +$renderer.hash-files.keys, 'all sources should be rendered';

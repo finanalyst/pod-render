@@ -85,9 +85,9 @@ unit class PodCache::Processed;
         $!engine.rendition( 'index', %( :index([gather for %!index.sort {  take %(:text(.key), :refs( [.value.sort] )) } ])  )  )
     }
     method register-link(Str $entry, Str $target is copy --> Str) {
-        my $content= $entry ?? $entry !! $target;
+        my $lable= $entry ?? $entry !! $target;
         $target = self.rewrite-target($target, :!unique);
-        @!links.push: %( :$content, :$target);
+        @!links.push: %( :$lable, :$target);
         $target
     }
     method register-footnote(:$text! --> Hash ) {
@@ -114,7 +114,20 @@ unit class PodCache::Processed;
         print "Processing pod #{++$processed } for $.name " if $!verbose;
         my $time = now;
         $!pod-body = [~] $!pod-tree>>.&handle( 0, self );
+        self.filter-links;
         say " in " ~ DateTime.new(now - $time ).second.fmt("%.2f") ~ "s" if $!verbose;
+    }
+
+    method filter-links {
+        # links have to be collected from the whole source before testing
+        # remove from the links list all those that match an internal target
+        # links to internal targets are specified with 1st char # in target
+        # targets in index are stored without #
+        my Set $internal .= new: gather for %.index.values -> @items { take .<target> for @items }
+        @!links = gather for @!links {
+            next if .<target> ~~ m/^ '#' $<tgt>=(.+) $ / and $internal{ $<tgt> }; #remove
+            take %(:source($!name), :target( .<target> ), :lable( .<lable> ) )
+        }
     }
 
     method rewrite-target(Str $candidate-name is copy, :$unique --> Str ) {

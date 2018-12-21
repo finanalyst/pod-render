@@ -36,9 +36,6 @@ method TWEAK {
             @!over-ridden.push: $tm-name
         }
     }
-    note "The following templates do not exist under $!t-dir\n\t"
-        ~ $missing.keys.join("\n\t")
-        if $!verbose;
 }
 
 method rendition(Str $key, %params --> Str) {
@@ -168,8 +165,8 @@ sub tmpl-data {
     ',
 
     'indexation-entry' => '<div class="indexation-entry">
-        <a href="{{ link }}">{{ title }}</a>
-        {{# subtitle }}{{ subtitle }}{{/ subtitle }}
+        <a href="{{ link }}">{{{ title }}}</a>
+        {{# subtitle }}{{{ subtitle }}}{{/ subtitle }}
         {{# toc }}<table class="indexation-entry-toc">
             <tr class="entry-toc-level-{{ level }}">
                 <td class="entry-toc-text"><a href="{{ link }}#{{ target }}">{{{ text }}}</a></td>
