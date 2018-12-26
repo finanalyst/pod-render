@@ -91,8 +91,7 @@ like $pf.pod-body, /
 #--MARKER-- Test 10
 like $pf.render-toc.subst(/\s+/,' ', :g).trim,
     /
-    '<nav class="indexgroup">'
-    \s* '<table id="TOC">'
+          '<table id="TOC">'
     \s* '<caption>'
     \s* '<h2 id="TOC_Title">Table of Contents</h2></caption>'
     \s* '<tr class="toc-level-2">'
@@ -101,5 +100,5 @@ like $pf.render-toc.subst(/\s+/,' ', :g).trim,
     \s* '</td>'
     \s* '</tr>'
     \s* '</table>'
-    \s* '</nav>'/
+    /
     , 'rendered simple toc';

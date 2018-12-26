@@ -64,16 +64,16 @@ like $rv, /
 $rv = $pr.render-index.subst(/\s+/,' ',:g).trim;
 #--MARKER-- Test 3
 like $rv, /
-    '<div id="index">'
-    \s* '<h2 class="source-index">Index</h2>'
-    \s* '<dl class="index">'
-    \s*     '<dt>X format</dt>'
-    \s*         '<dd><a href="#x_format">' .+ '</a></dd>'
-    \s*     '<dt>an item</dt>'
-    \s*         '<dd><a href="#an_item">' .+ '</a></dd>'
-    \s*         '<dd><a href="#an_item_0">' .+ '</a></dd>'
-    \s* '</dl>'
-    \s* '</div>'
+    '<table id="index">'
+    \s* '<caption><h2 id="source-index">Index</h2></caption>'
+    \s* '<tr class="index-defn-row">'
+    \s*     '<td class="index-defn">X format</td><td></td></tr>'
+    \s*         '<tr class="index-place-row"><td></td><td class="index-place"><a href="#x_format">' .+ '</a></td></tr>'
+    \s* '<tr class="index-defn-row">'
+    \s*     '<td class="index-defn">an item</td><td></td></tr>'
+    \s*         '<tr class="index-place-row"><td></td><td class="index-place"><a href="#an_item">' .+ '</a></td></tr>'
+    \s*         '<tr class="index-place-row"><td></td><td class="index-place"><a href="#an_item_0">' .+ '</a></td></tr>'
+    \s* '</table>'
     /, 'index rendered later';
 
 $pr = cache_test(++$fn, q:to/PODEND/);
@@ -111,24 +111,24 @@ like $rv, /
 $rv = $pr.render-index.subst(/\s+/,' ',:g).trim;
 #--MARKER-- Test 5
 like $rv, /
-    '<dt>Define an item</dt>'
+    '<tr class="index-defn-row">' \s* '<td class="index-defn">Define an item</td><td></td>'
     /, 'index contains the right entry text';
 #--MARKER-- Test 6
 like $rv, /
-    '<dt>defining</dt>' .* '<dd>' .+? 'a term' .+? '</dd>'
+    '<td class="index-defn">defining</td><td></td>' .* '<td></td><td class="index-place">' .+? 'a term' .+? '</td>'
     /, 'index contains hierarchy';
 #--MARKER-- Test 7
 like $rv, /
-    '<dt>Same</dt>'
+    '<td class="index-defn">Same</td><td></td>'
     /, 'index contains Same';
 #--MARKER-- Test 8
 like $rv, /
-    '<dt>Place</dt>'
+    '<td class="index-defn">Place</td><td></td>'
     /, 'index contains Place';
 #--MARKER-- Test 9
 like $rv, /
-    '<dt>an entry can exist</dt>'
+    '<td class="index-defn">an entry can exist</td><td></td>'
     /, 'index contains entry of zero text marker';
-$rv ~~ /  [ '<dt>' ~ '</dt>'  $<es> =(.+?)  .*? ]* $ /;
+$rv ~~ /  [ '<td class="index-defn">' ~ '</td>'  $<es> =(.+?)  .*? ]* $ /; 
 #--MARKER-- Test 10
 is-deeply $<es>>>.Str, ['Define an item','Place','Same','an entry can exist','defining'], 'Entries match, nothing for the X<>';

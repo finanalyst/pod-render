@@ -12,7 +12,8 @@ unit class PodCache::Processed;
     has Str $.path; # may/may not exist, but is path of original document
     has Str $.top is rw; # defaults to top, then becomes target for TITLE
     has $.pod-tree; # cached pod
-    has Str $.pod-body; # generated html
+    has Str $.pod-body; # rendition of whole source
+    has Instant $.when-rendered; # when rendered if successful
     has @.toc = ();
     has %.index = ();
     has @.links = (); # for links referenced
@@ -63,11 +64,11 @@ unit class PodCache::Processed;
         }
         else {
             # there must be something in either text or entries[0] to get here
-            $target = +@entries ?? @entries.join('-') !! $text;
+            $target = @entries ?? @entries.join('-') !! $text;
             $target = self.rewrite-target($target, :unique)
         }
-        my $place = +@.toc ?? @.toc[ * - 1]<text> !! FRONT-MATTER;
-        if +@entries {
+        my $place = @.toc ?? @.toc[ * - 1]<text> !! FRONT-MATTER;
+        if @entries {
             for @entries {
                 %.index{ .[0] } = Array unless %.index{ .[0] }:exists;
                 if .elems > 1 { %.index{ .[0] }.push: %(:$target, :place( .[1] )) }
@@ -98,14 +99,14 @@ unit class PodCache::Processed;
         (:$fnTarget, :$fnNumber, :$retTarget).hash
     }
     method render-footnotes(--> Str){
-        return '' unless +@!footnotes; # no rendering of code if no footnotes
+        return '' unless @!footnotes; # no rendering of code if no footnotes
         $!engine.rendition('footnotes', %( :notes( @!footnotes )  ) )
     }
     method register-meta( :$name, :$value ) {
         push @!metalist: %( :$name, :$value )
     }
     method render-meta {
-        return '' unless +@!metalist;
+        return '' unless @!metalist;
         $!engine.rendition('meta', %( :meta( @!metalist )  ))
     }
     method process-pod {
@@ -115,9 +116,13 @@ unit class PodCache::Processed;
         my $time = now;
         $!pod-body = [~] $!pod-tree>>.&handle( 0, self );
         self.filter-links;
-        say " in " ~ DateTime.new(now - $time ).second.fmt("%.2f") ~ "s" if $!verbose;
+        $!when-rendered = now;
+        say " in " ~ DateTime.new($!when-rendered - $time ).second.fmt("%.2f") ~ "s" if $!verbose;
     }
 
+    method rendered-at( -->Str ) {
+        DateTime.new($!when-rendered).truncated-to('seconds').Str;
+    }
     method filter-links {
         # links have to be collected from the whole source before testing
         # remove from the links list all those that match an internal target
@@ -171,7 +176,8 @@ unit class PodCache::Processed;
             :index( self.render-index),
             :footnotes( self.render-footnotes ),
             :body( $!pod-body ),
-            :path( $!path )
+            :path( $!path ),
+            :time( DateTime.new($!when-rendered).utc.truncated-to('seconds').Str )
         } )
     }
 

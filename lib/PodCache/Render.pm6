@@ -264,7 +264,7 @@ has $!output;
 
 has @!names; # ordered array of hash of names in cache, with directory paths
 has @!sources-added; # list of files that were added by update for reporting
-has %.global-index; # all items that can be targeted
+has %.global-index; # index items to be rendered in global-index, stored as source{item[target,place]}
 has %.global-links; # all links by source of link
 has SetHash $!links-tested .= new; # to avoid testing same external link twice
 has @!link-responses; # keep responses for report method
@@ -297,7 +297,7 @@ method gen-templates {
 
 #| Generate default index files from the document cache
 method generate-config-files {
-    self.make-names unless +@!names;
+    self.make-names unless @!names;
     my @params ;
     my $last-head = '';
     for @!names {
@@ -315,7 +315,7 @@ method generate-config-files {
 
 method gen-missing-sources( @names ) {
     note 'missing-sources index generated' if $!verbose;
-    if +@names {
+    if @names {
         note 'missing-sources index generated' if $!verbose;
         my @content = @names.map( { %(:item( :filename( $_)))});
         "$!config/missing-sources.yaml".IO.spurt: data('missing-sources-start') ~ save-yaml(%( :@content ) ).subst(/^^  '---' $$ \s /,'');
@@ -360,7 +360,8 @@ method process-cache( @names = $.list-files(<Current Valid>) --> Int ) { # ignor
     note "{+@names} sources for processing" if $!verbose;
     # if no change in source and all rendered, then no names,
     # so no processing will occur, and no need to rewrite db or config files
-    return 0 unless ( $!cache-processed = so(+@names));
+    $!cache-processed = True;
+    return 0 unless ?@names;
     self.process-name($_) for @names;
     note 'writing rendering db' if $!verbose;
     self.write-rendering-db; # no need to re-write if no changed
@@ -369,7 +370,6 @@ method process-cache( @names = $.list-files(<Current Valid>) --> Int ) { # ignor
     note 'testing links in processed files' if $!verbose;
     self.links-test;
     note 'cache processed' if $!verbose;
-    $!cache-processed = True;
     +@names
 }
 
@@ -383,8 +383,8 @@ method process-name( Str:D $source-name ) {
     %.global-index{$source-name} = $pf.index if +$pf.index.keys;
     %.global-links{$source-name}:delete;
     %.global-links{$source-name} = $pf.links if +$pf.links;
+    %!rendering-db{$source-name}<rendered> = $pf.when-rendered;
     self.source-wrap($pf);
-    %!rendering-db{$source-name}<rendered> = now;
 }
 
 method write-rendering-db {
@@ -433,8 +433,9 @@ method links-test {
     # generate a set of targets from the global-index in the form source#target
     # this form is specified by Pod and is rendering independent
     my Set $gtargets .= new: gather for %!global-index.kv -> $fn, %entries {
+        take $fn; take "/$fn";
         for %entries.kv -> $en, @dp {
-            for @dp { take "$fn#{ .<target> }" }
+            for @dp { take "$fn#{ .<target> }"; take "/$fn#{ .<target> }" }
         }
     };
     # links are stored as
@@ -460,7 +461,7 @@ method links-test {
         @!link-responses.append( "OK: local target ｢$link｣ $inf")
             if ! $!links-tested{ $link } and $gtargets{ $link } # not in tested set because gtargets test shortcircuits in unless
     }
-    note "Link responses are:\n", @!link-responses.join("\n") if +@!link-responses and $!verbose ;
+    note "Link responses are:\n", @!link-responses.join("\n") if @!link-responses and $!verbose ;
 }
 
 method test-link($target --> Str ) {
@@ -482,30 +483,28 @@ method test-link($target --> Str ) {
 
 method update-collection {
     $.update-cache;
-    unless "{$!output}/assets".IO ~~ :d {
-        mktree("$!output/assets") or die "Cannot create output directory at ｢{$!output}/assets｣";
-        with $!assets {
-            my $pref = $!assets.chars;
-            my @assets = my sub recurse ($dir) {
-                    gather for dir($dir) {
-                        take .Str.substr($pref) if .f;
-                        take slip sort recurse $_ if .d;
-                    }
-                }($!assets); # is the first definition of $dir
-            for @assets {
-                if   m/ ^ '/root/' / {
-                    "$!assets$_".IO.copy("$!output/{ .IO.basename }")
+    with $!assets {
+        my $pref = $!assets.chars;
+        my @assets = my sub recurse ($dir) {
+                gather for dir($dir) {
+                    take .Str.substr($pref) if .f;
+                    take slip sort recurse $_ if .d;
                 }
-                else {
-                    mktree( "$!output/assets/{.IO.dirname}" ) unless "$!output/assets/{.IO.dirname}".IO.d;
-                    "$!assets$_".IO.copy("$!output/assets$_")
-                }
+            }($!assets); # is the first definition of $dir
+        for @assets {
+            if   m/ ^ '/root/' / {
+                "$!assets$_".IO.copy("$!output/{ .IO.basename }")
+            }
+            else {
+                mktree( "$!output/{.IO.dirname}" ) unless "$!output/{.IO.dirname}".IO.d;
+                "$!assets$_".IO.copy("$!output$_")
             }
         }
-        else {
-            # no assets given, so copy pod.css
-            %?RESOURCES<assets/pod.css>.copy: "$!output/assets/pod.css"
-        }
+    }
+    else {
+        # no assets given, so copy pod.css
+        mktree "$!output/assets" unless "$!output/assets".IO.d;
+        %?RESOURCES<assets/pod.css>.copy: "$!output/assets/pod.css"
     }
     self.process-cache(
         $.list-files(<Current Valid>).grep({
@@ -534,7 +533,7 @@ method test-config-files( :$quiet  = False  ) {
     # No need to test global-index files because if there are items not in the section headers,
     # then they will be put into the Misc section
     my @index-files = dir($!config, :test(/ '.yaml' /) );
-    unless +@index-files {
+    unless @index-files {
         note 'No *.yaml files so generating defaults' if $!verbose;
         # testing index files without any existing ones, generates an error, to make this a quicker test.
         return
@@ -599,19 +598,19 @@ method test-config-files( :$quiet  = False  ) {
     }
     unless $quiet {
         note "Errors found: " ~
-            (+@errors ?? ("\n\t" ~ @errors.join("\n\t")) !! "None" );
+            (@errors ?? ("\n\t" ~ @errors.join("\n\t")) !! "None" );
         note "Pod sources summary";
         note "Number in cache and in config file(s): ", +@index-and-cache;
         note "Source names in cache but not in config file(s): " ~
-            (+$residue.keys ?? ("\n\t" ~ $residue.keys.join("\n\t")) !! "None" );
+            ($residue.keys ?? ("\n\t" ~ $residue.keys.join("\n\t")) !! "None" );
         note "Source names duplicated in config file(s): ",
-            (+@duplicates-in-index ?? ("\n\t" ~ @duplicates-in-index.join("\n\t")) !! "None" );
+            (@duplicates-in-index ?? ("\n\t" ~ @duplicates-in-index.join("\n\t")) !! "None" );
         note "Source names not in cache but in config file(s): ",
-            (+@not-in-cache ?? ("\n\t" ~ @not-in-cache.join("\n\t")) !! "None" );
+            (@not-in-cache ?? ("\n\t" ~ @not-in-cache.join("\n\t")) !! "None" );
     }
     my @not-in-index = $residue.keys>>.Str;
     self.gen-missing-sources(@not-in-index )
-        if +@not-in-index;
+        if @not-in-index;
     %( :@not-in-index,
         :@not-in-cache,
         :@duplicates-in-index,
@@ -619,9 +618,24 @@ method test-config-files( :$quiet  = False  ) {
         :@errors )
 }
 
+method write-search-js {
+    # %.global-index stored as source{item[target,place]}
+    my @items = gather for %!global-index.kv -> $source, %item {
+        for %item.kv -> $entry, @data {
+            for @data {
+                take %( :$source, :target( .<target> ),  :$entry, :place( .<place> ) )
+            }
+        }
+    }
+    @items[*-1]<last>++;
+    my $search-dir = "$!output/js";
+    mktree( $search-dir ) unless $search-dir.IO.d;
+    "$search-dir/search.js".IO.spurt: $!engine.rendition('search-js', { :@items, :generator( "$?FILE:$?LINE on " ~ now.DateTime.truncated-to('minutes') ) })
+}
+
 method write-config-files {
     my @index-files = dir($!config, :test(/ '.yaml' /) );
-    if +@index-files {
+    if @index-files {
         my %test = self.test-config-files(:quiet( ! $!verbose)); # make sure we can read the index files
         exit note "Cannot write index files because: " ~ %test<errors>.join("\n\t") if +%test<errors>;
     }
@@ -735,20 +749,29 @@ method source-params( %info ) {
     }
 }
 
-method report( Bool :$errors = False, Bool :$links-only = False, Bool :$cache-only = False, Bool :$just-rendered = False, Bool :$when-rendered = False ) {
+method report( Bool :$errors = False, Bool :$links = False, Bool :$cache = False, Bool :$just-rendered = False, Bool :$when-rendered = False ) {
+    my Bool $all = not ($links or $cache or $just-rendered or $when-rendered);
     my @rv;
-    @rv = @!link-responses.grep({ ! $errors or m/ ^ 'Error' /  })
-        unless $cache-only or $just-rendered or $when-rendered;
-    @rv = @.error-messages
-        unless $links-only or $just-rendered or $when-rendered;
-    @rv.append( $.hash-files.fmt )
-        unless $errors or $links-only or $just-rendered or $when-rendered;
-    @rv.append( $.hash-files(<Old Failed Valid>).fmt )
-        unless ! $errors or $links-only or $just-rendered or $when-rendered;
-    @rv.append( @!sources-added.sort )
-        unless ! $just-rendered or $errors or $cache-only or $links-only;
-    @rv.append( %!rendering-db.map({ "{ .key }\twas rendered on { .value<rendered>.DateTime.truncated-to('seconds') }" }))
-        unless ! $when-rendered or $errors or $cache-only or $links-only;
+    @rv.push('No cache files available, check doc cache') unless $.hash-files;
+    return @rv if @rv;
+    @rv.push('No link responses, has ｢links-test｣ been run?') unless @!link-responses;
+    return @rv if @rv and $links;
+    if $errors {
+        @rv = @!link-responses.grep({ ! $errors or m/ ^ 'Error' /  })
+            if $all or $links;
+        @rv.append( $.hash-files(<Old Failed Valid>).fmt )
+            if $all or $cache;
+    }
+    else {
+        @rv.append( $.hash-files.fmt )
+            if $all or $cache;
+        @rv = @!link-responses
+            if $all or $links;
+        @rv.append( @!sources-added.sort )
+            if $just-rendered or $all;
+        @rv.append( %!rendering-db.map({ "{ .key }\twas rendered on { .value<rendered>.DateTime.truncated-to('seconds') }" }))
+            if $when-rendered or $all;
+    }
     @rv
 }
 
