@@ -19,7 +19,8 @@
         "JSON::Fast",
         "Pod::To::Cached",
         "LibCurl::Easy",
-        "URI"
+        "URI",
+        "Template::Mustache"
     ],
     "resources": [
         "assets/pod.css"
