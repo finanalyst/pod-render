@@ -30,7 +30,8 @@
         "Test::Output",
         "Pod::To::Cached",
         "File::Directory::Tree",
-        "YAMLish"
+        "YAMLish",
+        "Data::Dump"
     ],
     "source-type" : "git",
     "source-url" : "git://github.com/finanalyst/pod-render.git"

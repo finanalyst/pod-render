@@ -270,6 +270,7 @@ has SetHash $!links-tested .= new; # to avoid testing same external link twice
 has @!link-responses; # keep responses for report method
 has %.rendering-db; # rendering data base
 has Bool $!cache-processed = False;
+has Int $!write-every = 0;
 
 submethod BUILD(
     :$templates = Str,
@@ -362,13 +363,14 @@ method process-cache( @names = $.list-files(<Current Valid>) --> Int ) { # ignor
     # so no processing will occur, and no need to rewrite db or config files
     $!cache-processed = True;
     return 0 unless ?@names;
-    self.process-name($_) for @names;
+    for @names.kv -> $n, $nm {
+        self.process-name($nm);
+        self.write-rendering-db if $!write-every and ((($n + 1) % $!write-every) == 0)
+    }
     note 'writing rendering db' if $!verbose;
-    self.write-rendering-db; # no need to re-write if no changed
+    self.write-rendering-db;
     note 'writing configuration files' if $!verbose;
     self.write-config-files;
-    note 'testing links in processed files' if $!verbose;
-    self.links-test;
     note 'cache processed' if $!verbose;
     +@names
 }
