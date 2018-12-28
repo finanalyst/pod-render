@@ -270,7 +270,7 @@ has SetHash $!links-tested .= new; # to avoid testing same external link twice
 has @!link-responses; # keep responses for report method
 has %.rendering-db; # rendering data base
 has Bool $!cache-processed = False;
-has Int $!write-every = 0;
+has Int $.write-every = 0;
 
 submethod BUILD(
     :$templates = Str,
