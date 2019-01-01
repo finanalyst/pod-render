@@ -82,7 +82,8 @@ is (OUTPUT ~ '/global-index.html').IO.f, True, 'indexation file generated';
 is (OUTPUT ~ '/myownhomepage.html').IO.f, True, 'custom file generated';
 
 #--MARKER-- Test 11
-is +$renderer.report(:errors,:links ), 2, 'Two external links have errors';
+$renderer.links-test;
+is +$renderer.report(:errors,:links ), 5, 'Expected number of external links have errors';
 
 my $mod-time = ( OUTPUT ~ '/a-second-pod-file.html').IO.modified;
 
@@ -108,14 +109,15 @@ $renderer.update-collection;
 ok $mod-time < ( OUTPUT ~ '/a-second-pod-file.html').IO.modified, 'tainted source has led to new html file';
 #--MARKER-- Test 13
 ok +$renderer.report(:errors, :cache ), 'no cache errors to report';
+$renderer.links-test;
 my @rv = $renderer.report(:errors,:links);
 #--MARKER-- Test 14
-is +@rv, 3, 'another error as the new link has no local target';
+is +@rv, 6, 'another error as the new link has no local target';
 #--MARKER-- Test 15
 like @rv.join, /'Is there an error in a local target'/,'local target hint';
 @rv=$renderer.report(:links);
 #--MARKER-- Test 16
-is +@rv, 6, 'a new link has been processed';
+is +@rv, 9, 'a new link has been processed';
 #--MARKER-- Test 17
 is +$renderer.report(:when-rendered), +$renderer.hash-files.keys, 'all sources should be rendered';
 $renderer.write-search-js;

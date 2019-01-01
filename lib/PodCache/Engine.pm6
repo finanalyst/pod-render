@@ -46,9 +46,10 @@ method rendition(Str $key, %params --> Str) {
         say %params.perl;
         say 'end params';
         say "\%tmpl\{$key} is: ";
-        say %!tmpl{$key}.perl;
+        say ($key eq 'zero') ?? '' !! %!tmpl{$key}.perl;
         say "end template";
     }
+    return '' if $key eq 'zero';
     die "Cannot process non-existent template ｢$key｣" unless %!tmpl{$key}:exists;
     $!tmpl-engine.render( %!tmpl{$key}, %params, :literal );
 }
@@ -62,8 +63,6 @@ sub tmpl-data {
     %(
     :escaped<{{ contents }}>,
     :raw<{{{ contents }}}>,
-    :format-c-index('C<{{{ contents }}}>'),
-    :zero(' '),
 
     'block-code' => '<pre class="pod-block-code{{# addClass }} {{ addClass }}{{/ addClass}}">{{# contents }}{{{ contents }}}{{/ contents }}</pre>
     ',
@@ -202,8 +201,7 @@ sub tmpl-data {
     ',
 
     'list' => '<ul>
-        {{# items }}{{{ . }}}{{/ items}}
-    </ul>
+        {{# items }}{{{ . }}}{{/ items}}</ul>
     ',
 
     'meta' => '{{# meta }}
@@ -363,7 +361,7 @@ sub tmpl-data {
                       },
                       {{# items }}{
                             category: "{{ source }}",
-                            value: "{{ entry }}{{# place }} << ｢{{ place }}｣{{/ place }}",
+                            value: "{{ entry }}{{# place }} «{{ place }}»{{/ place }}",
                             url: "{{ source }}#{{ target }}"
                         }{{^ last }},{{/ last }}{{/ items }}
                       ];
