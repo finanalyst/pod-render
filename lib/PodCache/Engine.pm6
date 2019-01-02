@@ -36,7 +36,7 @@ method TWEAK {
             @!over-ridden.push: $tm-name
         }
     }
-    note "Using customised templates: ", @!over-ridden ?? ("\n" ~ @!over-ridden.join("\n\t")) !! 'None' if $!verbose;
+    note "Using customised templates: ", @!over-ridden ?? ("\n\t" ~ @!over-ridden.join("\n\t")) !! 'None' if $!verbose;
 }
 
 method rendition(Str $key, %params --> Str) {

@@ -73,7 +73,7 @@ zef install PodCache::Module
 =item :output
 =item2 the path where output is sent
 =item2 default is a directory with the same name as C<rendering> in the current working directory
-=item2 if C<output> does not exist, then a Fatal Exception will be thrown.
+=item2 if C<output> does not exist, then it will be created.
 
 =item :assets
 =item2 path to a directory which may have subdirectories, eg.  C<js>, C<css>, C<images>
@@ -287,8 +287,8 @@ submethod BUILD(
         $!output = $output // $!rendering;
         $!config = $config // $!output;
         # both config and output directories must exist, no automatic generation
-        die "Output destination ｢$!output｣ must be a directory" unless $!output.IO ~~ :d;
-        die "Config location ｢$!config｣ must be a directory" unless $!config.IO ~~ :d;
+        mktree $!output unless $!output.IO.d;
+        die "Config location ｢$!config｣ must be a directory" unless $!config.IO.d;
         self.load-rendering-db
 }
 
