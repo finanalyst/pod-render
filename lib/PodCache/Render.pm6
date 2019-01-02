@@ -362,7 +362,6 @@ method process-cache( @names = $.list-files(<Current Valid>) --> Int ) { # ignor
     # if no change in source and all rendered, then no names,
     # so no processing will occur, and no need to rewrite db or config files
     $!cache-processed = True;
-    return 0 unless ?@names;
     for @names.kv -> $n, $nm {
         self.process-name($nm);
         self.write-rendering-db if $!write-every and ((($n + 1) % $!write-every) == 0)
@@ -756,7 +755,7 @@ method report( Bool :$errors = False, Bool :$links = False, Bool :$cache = False
     my @rv;
     @rv.push('No cache files available, check doc cache') unless $.hash-files;
     return @rv if @rv;
-    @rv.push('No link responses, has ｢links-test｣ been run?') unless @!link-responses;
+    @rv.push('No link responses, has ｢links-test｣ been run?') if ($links or $all) and not @!link-responses;
     return @rv if @rv and $links;
     if $errors {
         @rv = @!link-responses.grep({ ! $errors or m/ ^ 'Error' /  })
