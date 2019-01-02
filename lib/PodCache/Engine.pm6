@@ -94,7 +94,7 @@ sub tmpl-data {
 
     'footnotes' => '<div class="footnotes">
         <ol>{{# notes }}
-                <li id="{{ fnTarget }}">{{{ text }}}<a class="footnote" href="#{{ retTarget }}">Back</a></li>
+                <li id="{{ fnTarget }}">{{{ text }}}<a class="footnote" href="#{{ retTarget }}"> « Back »</a></li>
                 {{/ notes }}
         </ol>
     </div>
