@@ -342,7 +342,8 @@ method source-wrap( PodCache::Processed $pf, :$name = $pf.name ) {
     unless "$!output/$name".IO.dirname.IO ~~ :d {
         mktree "$!output/$name".IO.dirname # make sure the sub-directory exists in the output directory
     }
-    "$!output/$name.$!rendering".IO.spurt: $pf.source-wrap(:$name)
+    "$!output/$name.$!rendering".IO.spurt: $pf.source-wrap(:$name);
+    $pf
 }
 
 method processed-instance( :$name ) {

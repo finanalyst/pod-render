@@ -155,14 +155,20 @@ unit class PodCache::Processed;
         while $top-level > $in-level {
             if $top-level > 1 {
                 @.itemlist[$top-level - 2][0] = '' unless @.itemlist[$top-level - 2][0]:exists;
-                @.itemlist[$top-level - 2][* - 1] ~= $!engine.rendition('list', %( :items( @.itemlist.pop )  ))
+                @.itemlist[$top-level - 2][* - 1] ~= $!engine.rendition('list', %( :items( @.itemlist.pop )  ));
+                note "At $?LINE rendering with template ｢list｣ list level $in-level" if $!debug;
             }
             else {
-                $rv ~= $!engine.rendition('list', %( :items( @.itemlist.pop )  ))
+                $rv ~= $!engine.rendition('list', %( :items( @.itemlist.pop )  ));
+                note "At $?LINE rendering with template ｢list｣ list level $in-level" if $!debug;
+                note "At $?LINE rv is $rv" if $!debug;
             }
             $top-level = @.itemlist.elems
         }
+        note "At $?LINE rendering with template ｢$key｣ list level $in-level" if $!debug;
         $rv ~= $!engine.rendition($key, %params);
+        note "At $?LINE rv is $rv" if $!debug;
+        $rv
     }
 
     method source-wrap( :$name = $!name --> Str ) {
@@ -220,9 +226,11 @@ unit class PodCache::Processed;
     multi sub handle (Pod::Block::Named $node where $node.name.lc eq 'pod', Int $in-level, PodCache::Processed $pf, Context $context? = None  --> Str )  {
         note "At $?LINE node is { $node.WHAT.perl } with name { $node.name // 'na' }" if $pf.debug;
         my $name = $pf.top eq TOP ?? TOP !! 'pod' ; # TOP, until TITLE changes it. Will fail if multiple pod without TITLE
-        $pf.completion($in-level,'zero', %() ) ~ $pf.completion($in-level, 'section', %(
+        my $contents =
+        $pf.completion($in-level, 'section', %(
             :$name,
-            :contents( [~] $node.contents>>.&handle($in-level, $pf ))
+            :contents( [~] $node.contents>>.&handle($in-level, $pf )),
+            :tail( $pf.completion(0, 'zero', %() ) )
         ))
     }
 

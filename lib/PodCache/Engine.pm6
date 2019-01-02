@@ -221,7 +221,7 @@ sub tmpl-data {
 
     'para' => '<p{{# addClass }} class="{{ addClass }}"{{/ addClass }}>{{{ contents }}}</p>',
 
-    'section' => '<section name="{{ name }}">{{{ contents }}}
+    'section' => '<section name="{{ name }}">{{{ contents }}}{{{ tail }}}
     </section>',
 
     'subtitle' => '<div class="subtitle{{# addClass }} {{ addClass }}{{/ addClass }}">{{{ contents }}}</div>',
