@@ -81,8 +81,8 @@ is (OUTPUT ~ '/global-index.html').IO.f, True, 'indexation file generated';
 #--MARKER-- Test 10
 is (OUTPUT ~ '/myownhomepage.html').IO.f, True, 'custom file generated';
 
-#--MARKER-- Test 11
 $renderer.links-test;
+#--MARKER-- Test 11
 is +$renderer.report(:errors,:links ), 5, 'Expected number of external links have errors';
 
 my $mod-time = ( OUTPUT ~ '/a-second-pod-file.html').IO.modified;
@@ -121,4 +121,5 @@ is +@rv, 9, 'a new link has been processed';
 #--MARKER-- Test 17
 is +$renderer.report(:when-rendered), +$renderer.hash-files.keys, 'all sources should be rendered';
 $renderer.write-search-js;
+#--MARKER-- Test 18
 ok (OUTPUT ~ '/js/search.js').IO ~~ :f, 'search js file generated';

@@ -62,7 +62,7 @@ $rv = $pr.render-footnotes.subst(/\s+/,' ',:g).trim;
 like $rv, /
     \s* '<div class="footnotes">'
     \s* '<ol>'
-    \s* '<li id="fn' .+ '">A footnote<a class="footnote" href="#fnret' .+ '">Back</a></li>'
+    \s* '<li id="fn' .+ '">A footnote<a class="footnote" href="#fnret' .+ '"> « Back »</a></li>'
     \s* '<li' .+ '>next to a word<a'
     .+
     '</ol>'

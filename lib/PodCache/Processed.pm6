@@ -28,6 +28,7 @@ unit class PodCache::Processed;
     has $!file-ext = 'html'; # most likely
     has Bool $!in-defn-list = False;
     has PodCache::Engine $.engine ;
+    has &.highlighter;
 
     submethod BUILD  (
         :$!name,
@@ -38,6 +39,7 @@ unit class PodCache::Processed;
         :$!engine = PodCache::Engine.new,
         :$!collection-unique = False,
         :$!path = '',
+        :&!highlighter,
         ) { }
 
     submethod TWEAK {
@@ -198,7 +200,14 @@ unit class PodCache::Processed;
         note "At $?LINE node is { $node.WHAT.perl }" if $pf.debug;
         my $addClass = $node.config && $node.config<class> ?? ' ' ~ $node.config<class> !! '';
         # first completion is to flush a retained list before the contents of the block are processed
-        $pf.completion($in-level,'zero', %() ) ~ $pf.completion($in-level, 'block-code', %( :$addClass, :contents( [~] $node.contents>>.&handle($in-level, $pf ) ) ) )
+        my $retained-list = $pf.completion($in-level,'zero', %() );
+        my $contents =  [~] $node.contents>>.&handle($in-level, $pf );
+        with $pf.highlighter { note "highlighter is defined";
+            $retained-list ~ $pf.highlighter( $contents )
+        }
+        else {
+            $retained-list ~ $pf.completion($in-level, 'block-code', %( :$addClass, :$contents ) )
+        }
     }
 
     multi sub handle (Pod::Block::Comment $node, Int $in-level, PodCache::Processed $pf, Context $context? = None  --> Str )  {

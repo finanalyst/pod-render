@@ -47,12 +47,11 @@ $cache.update-cache;
 use-ok 'PodCache::Render';
 use PodCache::Render;
 my PodCache::Render $renderer;
-#--MARKER-- Test 2
-throws-like { $renderer .= new(:path( REP ))}, Exception, :message(/'Output destination' .+ 'must be a directory'/), 'no output directory';
 
-mktree OUTPUT;
-#--MARKER-- Test 3
+#--MARKER-- Test 2
 lives-ok { $renderer .= new(:path( REP ), :output( OUTPUT ))}, 'instantiates';
+#--MARKER-- Test 3
+ok OUTPUT.IO.d, 'output directory created';
 
 my $pod;
 #--MARKER-- Test 4

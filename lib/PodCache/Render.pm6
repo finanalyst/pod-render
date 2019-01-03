@@ -20,7 +20,8 @@ Pod file names are assumed to have no spaces in them.
         :output<path-to-output>,
         :rendering<html>,
         :assets<path-to-assets-folder>,
-        :config<path-to-config-folder>
+        :config<path-to-config-folder>,
+        :highlighter( -> $n { $n })
         );
     my $ok = $renderer.update-cache; # identify new or changed pod sources
     exit note('The following sources failed to compile', $renderer.list-files('Failed').join("/n/t"))
@@ -96,6 +97,13 @@ then after rendering C<$?CWD/html/> will contain C<favicon.ico>
 =item2 boolean default False
 =item2 if true href links in <a> tags must all be relative to collection (podfile appended to local link)
 =item2 if false, then links internal to the source need only be unique relative to the source
+
+=item :highlighter
+=item2 code default undefined
+=begin item2
+if defined, then the code is expected to receive a String containing perl6 code
+and return a String of the same code highlighted in a form consistent with the rendering.
+=end item2
 
 =item create-collection
 =item2 Creates a collection from scratch.
@@ -271,6 +279,7 @@ has @!link-responses; # keep responses for report method
 has %.rendering-db; # rendering data base
 has Bool $!cache-processed = False;
 has Int $.write-every is rw = 0;
+has &!highlighter;
 
 submethod BUILD(
     :$templates = Str,
@@ -355,6 +364,7 @@ method processed-instance( :$name ) {
         :$!engine,
         :$!debug,
         :$!verbose,
+        :&!highlighter,
     )
 }
 
