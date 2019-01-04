@@ -189,6 +189,8 @@ unit class PodCache::Processed;
         } )
     }
 
+    method highlight( Str $s --> Str ) { &!highlighter(  $s ) }
+
     my enum Context <None Index Heading HTML Raw Output>;
 
     multi sub recurse-until-str(Str:D $s){ $s } # strip out formating code and links
@@ -202,8 +204,8 @@ unit class PodCache::Processed;
         # first completion is to flush a retained list before the contents of the block are processed
         my $retained-list = $pf.completion($in-level,'zero', %() );
         my $contents =  [~] $node.contents>>.&handle($in-level, $pf );
-        with $pf.highlighter { note "highlighter is defined";
-            $retained-list ~ $pf.highlighter( $contents )
+        with $pf.highlighter {
+            $retained-list ~ $pf.highlight( $contents )
         }
         else {
             $retained-list ~ $pf.completion($in-level, 'block-code', %( :$addClass, :$contents ) )

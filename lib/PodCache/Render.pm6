@@ -30,8 +30,11 @@ Pod file names are assumed to have no spaces in them.
     # if the collection needs to be recreated
     $renderer.create-collection;
 
-    # to update an existing Collection
+    # to update an existing Collection based on rendering date
     $renderer.update-collection;
+
+    # to update known sources only irrespective of date
+    $renderer.process-cache('language/5to6-nutshell', 'language/intro');
 
     # Utility  functions
 
@@ -120,19 +123,20 @@ and return a String of the same code highlighted in a form consistent with the r
 =item2 Returns an array of strings containing information
 =item2 no adverbs:  all link responses, all cache statuses, all files when rendered.
 =item2 :errors (default = False):  Failed link responses, files with cache status Valid, Failed, Old; no rendering info
-=item2 :links-only  (default = False): Supply link responses only.
-=item2 :cache-only (default = False): ditto for cache reponses.
+=item2 :links  (default = False): Supply link responses only.
+=item2 :cache (default = False): ditto for cache reponses.
 =item2 :just-rendered (default = False): the sources added by the most recent call to update-collection
-=item2 :when-rendered (default = True ):  source and time rendered
+=item2 :when-rendered (default = False ):  source and time rendered
+=item2 If no adverbs are given, then it is assumed all are True
 
 =head1 Usage
 
 To render a document cache to HTML:
 =item place pod sources in C<doc>,
-=item create a writable directory C<html/>
 =item instantiate a Render object, (C<$renderer>)
 =item run create-collection (C<$render.create-collection>)
 =item verify whether there are problems to solve (C<$renderer.report>)
+=item later: Run C<$renderer.update-collection>
 
 =head2 Customisation
 
@@ -290,6 +294,7 @@ submethod BUILD(
     :$!collection-unique = False,
     :$!verbose = False,
     :$!debug = False,
+    :&!highlighter,
     ) {
         $!engine .= new(:$templates, :$rendering,:$!verbose);
         $!rendering = $!engine.rendering; # this sequence so that default rendering is set only in Engine.pm6
@@ -355,7 +360,7 @@ method source-wrap( PodCache::Processed $pf, :$name = $pf.name ) {
     $pf
 }
 
-method processed-instance( :$name ) {
+method processed-instance( :$name ) { say &!highlighter.perl;
     PodCache::Processed.new(
         :$name,
         :pod-tree( self.pod($name) ),

@@ -1,6 +1,4 @@
 # Pod::Render
-
-
 This module provides functionality to take a precompiled pod and generate
 output based on templates. To the extent possible, all rendering specific (eg. html)
 code is moved to templates.
@@ -8,12 +6,10 @@ code is moved to templates.
 Pod file names are assumed to have no spaces in them.
 
 ## Install
-
 This module is in the [Perl 6 ecosystem](https://modules.perl6.org), so you install it in the usual way:
-
+```
     zef install PodCache::Module
-
-
+```
 # SYNOPSIS
 ```perl6
 use PodCache::Render;
@@ -24,7 +20,8 @@ my PodCache::Render $renderer .= new(
     :output<path-to-output>,
     :rendering<html>,
     :assets<path-to-assets-folder>,
-    :config<path-to-config-folder>
+    :config<path-to-config-folder>,
+    :highlighter( -> $n { $n })
     );
 my $ok = $renderer.update-cache; # identify new or changed pod sources
 exit note('The following sources failed to compile', $renderer.list-files('Failed').join("/n/t"))
@@ -35,6 +32,9 @@ $renderer.create-collection;
 
 # to update an existing Collection
 $renderer.update-collection;
+
+# to update known sources only irrespective of date
+$renderer.process-cache('language/5to6-nutshell', 'language/intro');
 
 # Utility  functions
 
@@ -47,6 +47,7 @@ $renderer.test-config;
 # After `create-collection` or `update-collection`
 say $renderer.report;
 ```
+# Methods and Build options
 
 ## new
     - instantiates object and verifies cache is present
@@ -72,7 +73,7 @@ say $renderer.report;
 
 ## :output
     - the path where output is sent
-    - if `output` does not exist, then a Fatal Exception will be thrown.
+    - if `output` does not exist, then it will be created.
 
 ## :assets
     - path to a directory which may have subdirectories, eg.  `js`, `css`, `images`
@@ -91,6 +92,11 @@ say $renderer.report;
     - if true href links in <a> tags must all be relative to collection (podfile appended to local link)
     - if false, then links internal to the source need only be unique relative to the source
 
+## :highlighter
+    - code default undefined
+    - if defined, then the code is expected to receive a String containing perl6 code
+    and return a String of the same code highlighted in a form consistent with the rendering.
+
 ## create-collection
     - Creates a collection from scratch.
     - Erases all previous rendering files, rewrites the rendering database file
@@ -106,93 +112,94 @@ say $renderer.report;
     - Returns an array of strings containing information
     - no adverbs:  all link responses, all cache statuses, all files when rendered.
     - :errors (default = False):  Failed link responses, files with cache status Valid, Failed, Old; no rendering info
-    - :links-only  (default = False): Supply link responses only.
-    - :cache-only (default = False): ditto for cache reponses.
+    - :links  (default = False): Supply link responses only.
+    - :cache (default = False): ditto for cache reponses.
     - :just-rendered (default = False): the sources added by the most recent call to update-collection
-    - :when-rendered (default = True ):  source and time rendered
+    - :when-rendered (default = False ):  source and time rendered
+    - if no adverbs are given, then it is assumed that all are True
 
 # Usage
 
 To render a document cache to HTML:
     - place pod sources in `doc`,
-    - create a writable directory `html/`
     - instantiate a Render object, (`$renderer`)
     - run create-collection (`$render.create-collection`)
     - verify whether there are problems to solve (`$renderer.report`)
 
-    =head2 Customisation
+    - later run `$renderer.update-collection`
 
-    =head3 Sources
+## Customisation
 
-    The cache and sources are managed using `Pod::To::Cache` module, and the source and repository names can be changed,
-    as documented in that module.
+### Sources
 
-    The source directory may contain subdirectories. The 'name' of a source is the subdirectory/basename of the source without an
-    extension, which are by default `pod | pod6`.
+The cache and sources are managed using `Pod::To::Cache` module, and the source and repository names can be changed, as documented in that module.
 
-    =head3 Rendering
+The source directory may contain subdirectories. The 'name' of a source is the `subdirectory/basename` of the source without an
+extension, which are by default `pod | pod6`.
 
-    All of the rendering is done via mustache templates.
+### Rendering
 
-    Each template can be over-ridden individually by setting the `:templates` option to a directory and placing the mustache file there.
+All of the rendering is done via mustache templates.
 
-    Typically, the template `source-wrap.mustache` will be over-ridden in order to provide links to custom css, js, and image files.
+Each template can be over-ridden individually by setting the `:templates` option to a directory and placing the mustache file there.
 
-    The source-wrap template is called with the following elements:
-    -    :title generated from the pod file's V<=TITLE>
-    -    :subtitle generated from the pod file's V<=SUBTITLE>
-    -    :metadata generated from the pod file's V<=AUTHOR, =SUMMARY, etc >
-    -    :toc generated from the pod file's V<=HEAD>
-    -    :index generated from the pod file's V< X<> elements>
-    -    :footnotes generated from the pod file's V<N<> elements>
-    -    :body generated from the pod file
-    -    :path a string containing the original path of the POD6 file (if the doc-cache retains the information)
+Typically, the template `source-wrap.mustache` will be over-ridden in order to provide links to custom css, js, and image files.
 
-    In order to see all the templates, instantiate a Render object pointing to a template directory, and run the `gen-templates` method.
-    The templates `toc` and `index` may need tweaking for custom Table of Contents and Index (local index to the source) rendering.
+The source-wrap template is called with the following elements:
+-    :title generated from the pod file's V<=TITLE>
+-    :subtitle generated from the pod file's V<=SUBTITLE>
+-    :metadata generated from the pod file's V<=AUTHOR, =SUMMARY, etc >
+-    :toc generated from the pod file's V<=HEAD>
+-    :index generated from the pod file's V< X<> elements>
+-    :footnotes generated from the pod file's V<N<> elements>
+-    :body generated from the pod file
+-    :path a string containing the original path of the POD6 file (if the doc-cache retains the information)
 
-    =head3 CSS, JS, Images
+In order to see all the templates, instantiate a Render object pointing to a template directory, and run the `gen-templates` method.
+The templates `toc` and `index` may need tweaking for custom Table of Contents and Index (local index to the source) rendering.
 
-    All the contents (files and recursively subdirectories) in a directory provided to the `:assets` option upon instantiation
-    will be copied to the subdirectory `B<output`/assets/>, where B<output> is the directory for the rendered files.
+### CSS, JS, Images
 
-    =head Configuration
+All the contents (files and recursively subdirectories) in a directory provided to the `:assets` option upon instantiation
+will be copied to the subdirectory `B<output`/assets/>, where B<output> is the directory for the rendered files.
 
-    By default - that is without any configuration file(s) - a "landing page" index file, called `index.B<ext`>, is generated
-    from the source cache with the documents
-    in the top directory of the cache listed by
-    TITLE, followed by the SUBTITLE, followed by the Table of Content for the cache file.
-    If the cache has subdirectories, then the name of the directory is made into a title, and the files under it are listed as above.
+# Configuration
 
-    A separate file called `global-index.B<ext`> is also generated by default containing
-    the indexed elements from all the pod-files in the cache.
+By default - that is without any configuration file(s) - a "landing page" index file, called `index.B<ext`>, is generated
+from the source cache with the documents
+in the top directory of the cache listed by
+TITLE, followed by the SUBTITLE, followed by the Table of Content for the cache file.
+If the cache has subdirectories, then the name of the directory is made into a title, and the files under it are listed as above.
 
-    These two files are rendered into html (by default), but if a different rendering has been specified, they will follow those rendering
-    templates.
+A separate file called `global-index.B<ext`> is also generated by default containing
+the indexed elements from all the pod-files in the cache.
 
-    If a `config` directory is provided, Render will look for `*.yaml` files and consider them customised index files.
+These two files are rendered into html (by default), but if a different rendering has been specified, they will follow those rendering
+templates.
 
-    The structure of the index file is documented in the default files (see below for generating default files). However, if B<a customised rendered file>
-    is required, eg., a customised `index.html`, then the `index.yaml` file (where B<index> could be any name) should contain the
-    single line `source: R<filename.ext`>.
+If a `config` directory is provided, Render will look for `*.yaml` files and consider them customised index files.
 
-    The R<filename.ext> should be the name of the file relative to the `Configuration` directory and it will be copied to the `Output`
-    directory.
+The structure of the index file is documented in the default files (see below for generating default files). However, if B<a customised rendered file>
+is required, eg., a customised `index.html`, then the `index.yaml` file (where B<index> could be any name) should contain the
+single line `source: R<filename.ext`>.
 
-    Each configuration file will be converted from `name.yaml` to `name.B<ext`> where B<ext> is `html` by default, but could, eg,
-    be `md` if the rendering is to Markdown and templates are provided.
+The R<filename.ext> should be the name of the file relative to the `Configuration` directory and it will be copied to the `Output`
+directory.
 
-    If there are sources in the document cache that are not included in customised `*.yaml` index files, then a `missing-sources.yaml`
-    configuration file will be generated and used to create an index file.
+Each configuration file will be converted from `name.yaml` to `name.B<ext`> where B<ext> is `html` by default, but could, eg,
+be `md` if the rendering is to Markdown and templates are provided.
 
-    The indexation files are rendered using the templates `indexation-file` and `global-indexation-file`, respectively.
-    These templates can be over-ridden as required.
+If there are sources in the document cache that are not included in customised `*.yaml` index files, then a `missing-sources.yaml`
+configuration file will be generated and used to create an index file.
 
-    For more information, generate the default configuration files into the `config` directory (see below).
+The indexation files are rendered using the templates `indexation-file` and `global-indexation-file`, respectively.
+These templates can be over-ridden as required.
+
+For more information, generate the default configuration files into the `config` directory (see below).
 
 # Work Flow
 
-    The work flow to create a document collection might be:
+The work flow to create a document collection might be:
     - create the collection (which will generate default configuration files)
     - remove creation errors (in pod sources)
     - edit configuration files into more content oriented forms
@@ -219,15 +226,13 @@ To render a document cache to HTML:
     - The index files themselves are generated using the `indexation-file`/`global-indexation-file` templates
     - the extension of the final index files will be the same as `rendering`
     - the filename of the index file will be same as the +.yaml files in the config directory
-    
+
 ## test-config-files
     - `config` is a directory that should contain the config files.
     - if no .yaml files are in the config directory, the method will throw a Fatal Exception.
     - each pod6 file will be read and the filenames from V<=item> lines will be compared to the files in the doc-cache
     - any file present in I<the doc-cache>, but B<not> included in I<a config file> will be output into a config file called `misc.pod6`
     - any filename included in I<a config file>, but B<not> in I<the doc-cache>, will be listed in a file called `error.txt`
-
-
 
 ## LICENSE
 
