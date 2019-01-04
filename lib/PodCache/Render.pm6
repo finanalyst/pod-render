@@ -682,7 +682,7 @@ method process-config( $fn ) {
             if $!verbose and ! ("$!config/{%index<source>}".IO ~~ :f);
         return Empty
     }
-    my %params = :title(%index<title>), :body( '' ), :path( ~$fn ), :type( %index<type> // 'normal' );
+    my %params = :title(%index<title>), :body( '' ), :path( ~$fn ), :type( %index<type> // 'normal' ), :time( now.DateTime.truncated-to('seconds') );
     my $body := %params<body>;
     $body ~=
         $!engine.rendition('title', %( :text(%index<title>), :target<__top> ) )
