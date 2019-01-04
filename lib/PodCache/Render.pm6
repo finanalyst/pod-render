@@ -30,8 +30,11 @@ Pod file names are assumed to have no spaces in them.
     # if the collection needs to be recreated
     $renderer.create-collection;
 
-    # to update an existing Collection
+    # to update an existing Collection where render date < source date
     $renderer.update-collection;
+
+    # to process known files
+    $renderer.process-cache('language/5to6-nutshell', 'language/intro');
 
     # Utility  functions
 
@@ -42,6 +45,7 @@ Pod file names are assumed to have no spaces in them.
     $renderer.test-config;
 
     # After C<create-collection> or C<update-collection>
+    $renderer.links-test; # expensive test of all links
     say $renderer.report;
 
 =end SYNOPSIS
@@ -120,19 +124,20 @@ and return a String of the same code highlighted in a form consistent with the r
 =item2 Returns an array of strings containing information
 =item2 no adverbs:  all link responses, all cache statuses, all files when rendered.
 =item2 :errors (default = False):  Failed link responses, files with cache status Valid, Failed, Old; no rendering info
-=item2 :links-only  (default = False): Supply link responses only.
-=item2 :cache-only (default = False): ditto for cache reponses.
+=item2 :links  (default = False): Supply link responses only.
+=item2 :cache (default = False): ditto for cache reponses.
 =item2 :just-rendered (default = False): the sources added by the most recent call to update-collection
-=item2 :when-rendered (default = True ):  source and time rendered
+=item2 :when-rendered (default = False ):  source and time rendered
+=item2 If no adverbs are given, then it is assumed all are True
 
 =head1 Usage
 
 To render a document cache to HTML:
 =item place pod sources in C<doc>,
-=item create a writable directory C<html/>
 =item instantiate a Render object, (C<$renderer>)
 =item run create-collection (C<$render.create-collection>)
 =item verify whether there are problems to solve (C<$renderer.report>)
+=item later: Run C<$renderer.update-collection>
 
 =head2 Customisation
 
@@ -242,7 +247,7 @@ The work flow to create a document collection might be:
 =item2 C<config> is a directory that should contain the config files.
 =item2 if no .yaml files are in the config directory, the method will throw a Fatal Exception.
 =item2 each pod6 file will be read and the filenames from V<=item> lines will be compared to the files in the doc-cache
-=item2 any file present in I<the doc-cache>, but B<not> included in I<a config file> will be output into a config file called C<misc.pod6>
+=item2 any file present in I<the doc-cache>, but B<not> included in I<a config file> will be output into a config file called C<missing-sources.yaml>
 =item2 any filename included in I<a config file>, but B<not> in I<the doc-cache>, will be listed in a file called C<error.txt>
 
 =end pod
@@ -290,6 +295,7 @@ submethod BUILD(
     :$!collection-unique = False,
     :$!verbose = False,
     :$!debug = False,
+    :&!highlighter,
     ) {
         $!engine .= new(:$templates, :$rendering,:$!verbose);
         $!rendering = $!engine.rendering; # this sequence so that default rendering is set only in Engine.pm6
