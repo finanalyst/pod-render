@@ -80,11 +80,11 @@ say $renderer.report;
     - the subdirectories/files are copied to the `output` directory, so that `assets/js/file.js` is copied to
     `html/assets/js/file.js` assuming that `output` = `html`.
     - An exception is the `B<asset`/root> subdirectory. All items in `root` are copied to the `output` directory.
-    For example, if `PodCache::Render $renderer .=new(:assets<assets`, :output<html>)> and `$?CWD/assets/root/favicon.ico`,
+    For example, if `PodCache::Render $renderer .=new(:assets<assets>, :output<html>)>` and `$?CWD/assets/root/favicon.ico`,
     then after rendering `$?CWD/html/` will contain `favicon.ico`
 
 ## :config
-    -  path to a directory containing configuration files (see below)
+    - path to a directory containing configuration files (see below)
     - configuration files are rendered into a html files with links to the pod files.
 
 ## :collection-unique
@@ -200,38 +200,61 @@ For more information, generate the default configuration files into the `config`
 # Work Flow
 
     The work flow to create a document collection might be:
-    - create the collection (which will generate default configuration files)
-    - remove creation errors (in pod sources)
-    - edit configuration files into more content oriented forms
-    - edit templates to customise content
-    - run <test-indices> method to ensure that config files contain all source names and no typos create an invalid source
-    - add customised css, js, and images
-    - when source files are edited run `update-collection` and check for errors using the `report`method
-    - eg `die 'errors found: ' ~ $renderer.report(:all).join("\n") if +$renderer.report(:errors);`
 
+    - create the collection (which will generate default configuration files)
+
+    - remove creation errors (in pod sources)
+
+    - edit configuration files into more content oriented forms
+
+    - edit templates to customise content
+
+    - run <test-indices> method to ensure that config files contain all source names and no typos create an invalid source
+
+    - add customised css, js, and images
+
+    - when source files are edited run `update-collection` and check for errors using the `report`method
+    
+    - eg
+```
+die 'errors found: ' ~ $renderer.report(:all).join("\n") if +$renderer.report(:errors);
+```
 # Utilities
 
 ## templates-changed
+
     - Generates a list of template names that have been over-ridden.
+
 ## gen-templates
+
     - 'templates/rendering' is interpreted as a directory, which must exist. All the mustache templates will be copied into it.
+
     - Only the templates required may be kept. Some templates, such as `zero` do not need to be over-ridden as there is no rendering data.
+
 ## generate-config-files
+
     - `:config` is a writable directory that must exist, defaults to `output`
-    -
-        the two index files `index.yaml` and `global-index.yaml` are generated in that directory. The intent is to provide templates for
-        customised config files. For more information generate a template.
+
+    - the two index files `index.yaml` and `global-index.yaml` are generated in that directory. The intent is to provide templates for customised config files. For more information generate a template.
 
     - Care should be taken as any custom `index.yaml` or `global-index.yaml` files will be over-written by this method
+
     - The index files themselves are generated using the `indexation-file`/`global-indexation-file` templates
+
     - the extension of the final index files will be the same as `rendering`
+
     - the filename of the index file will be same as the +.yaml files in the config directory
 
 ## test-config-files
+
     - `config` is a directory that should contain the config files.
+
     - if no .yaml files are in the config directory, the method will throw a Fatal Exception.
+
     - each pod6 file will be read and the filenames from V<=item> lines will be compared to the files in the doc-cache
+
     - any file present in I<the doc-cache>, but B<not> included in I<a config file> will be output into a config file called `missing-sources.yaml`
+
     - any filename included in I<a config file>, but B<not> in I<the doc-cache>, will be listed in a file called `error.txt`
 
 ## LICENSE
