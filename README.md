@@ -1,4 +1,7 @@
 # Pod::Render
+This is an out-dated module. It has been replaced by Raku::Pod::Render.
+Applologies for the name confusion.
+
 This module provides functionality to take a precompiled pod and generate
 output based on templates. To the extent possible, all rendering specific (eg. html)
 code is moved to templates.
