@@ -493,8 +493,8 @@ unit class PodCache::Processed;
                 $contents = $curl.perform.content;
             }
             when 'file' | '' {
-                if ($uri.path).IO ~~ :f {
-                    $contents = ($uri.path).IO.slurp;
+                if ($uri.path).Str.IO ~~ :f {
+                    $contents = ($uri.path).Str.IO.slurp;
                 }
                 else {
                     $contents = "No file found at ｢$link｣";
